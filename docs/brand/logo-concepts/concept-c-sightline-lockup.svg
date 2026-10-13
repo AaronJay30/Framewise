@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 256" width="960" height="256" role="img" aria-labelledby="title">
+  <title id="title">FrameWise Sightline lockup</title>
+  <g id="symbol">
+    <path fill="#10151B" fill-rule="evenodd" d="M42 48a28 28 0 0 1 28-28h116a28 28 0 0 1 28 28v116a28 28 0 0 1-28 28H70a28 28 0 0 1-28-28V48Zm24 0v116a4 4 0 0 0 4 4h116a4 4 0 0 0 4-4V48a4 4 0 0 0-4-4H70a4 4 0 0 0-4 4Z"/>
+    <path fill="#FF6B57" d="M66 170 170 66h34v20L86 204H66v-34Z"/>
+    <circle cx="174" cy="82" r="18" fill="#FF6B57"/>
+  </g>
+  <g id="wordmark" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="92" font-weight="700" letter-spacing="-3">
+    <text x="300" y="164" fill="#10151B">Frame</text><text x="620" y="164" fill="#FF6B57">Wise</text>
+  </g>
+</svg>

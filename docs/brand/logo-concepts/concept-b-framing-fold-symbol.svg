@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="title">
+  <title id="title">FrameWise Framing Fold symbol</title>
+  <g id="symbol">
+    <path fill="#10151B" d="M42 44h24v168H42z"/>
+    <path fill="#10151B" d="M42 44h96v24H42z"/>
+    <path fill="#10151B" d="M42 108h72v24H42z"/>
+    <path fill="#FF6B57" d="M120 64h24v64l16 16 16-16V64h24v72l-40 69.3-40-69.3V64Z"/>
+    <path fill="#10151B" d="M144 64h24v64l-8 13.856-16-13.856V64Z"/>
+  </g>
+</svg>
