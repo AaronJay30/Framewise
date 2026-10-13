@@ -13,10 +13,10 @@
 ## Global Constraints
 
 - Support the package's existing platform floors: iOS 17 and macOS 14.
-- Use the approved brand colors Ink `#10151B` and Signal Coral `#FF6B57` for the mark and artwork; the app icon may use neutral White `#FFFFFF` as its tile background.
-- Keep the white-tile app icon as the default bundle icon and provide a transparent clear-logo companion asset without changing the default icon path.
+- Use a black `#000000` app-icon background, white `#FFFFFF` frame, and Signal Coral `#FF6B57` center diamond.
+- Package the single app-icon PNG through xtool's `iconPath`; iOS may still apply its automatic Dark and Clear treatments.
 - The selected Open Crop symbol is the app logo; the tightened `Frame`/`Wise` lockup is for the opener.
-- The opener fades in for about one second while camera initialization is in progress and must not add an artificial wait.
+- The opener animates its mark and wordmark in sequence and remains visible for at least 2.5 seconds while camera startup runs in parallel; terminal recovery states bypass this minimum.
 - Opener and recovery surfaces follow the system light/dark appearance; fixed brand tokens remain unchanged.
 - Reduced Motion removes scale movement and retains only an opacity transition.
 - The bottom dock contains only library, shutter, and camera-flip controls.
@@ -89,21 +89,21 @@
 
 **Interfaces:**
 - Produces `Resources/FrameWiseAppIcon.png` at exactly 1024×1024 for `xtool.yml`'s `iconPath`.
-- The icon is a full-bleed White tile with a simplified, symbol-only Ink Open Crop mark and Signal Coral center diamond; the neutral tile keeps the small-size mark crisp.
+- The icon is a full-bleed black tile with a simplified, symbol-only white Open Crop frame and Signal Coral center diamond.
 
 - [ ] **Step 1: Write the asset validation check**
 
-  Validate that the PNG exists, is 1024×1024, contains only the Ink and Signal Coral RGB colors, and that the SVG source is XML-valid.
+  Validate that the PNG exists, is 1024×1024, has a black background, white frame, and Signal Coral center, and that the SVG source is XML-valid.
 
 - [ ] **Step 2: Run the validation to verify RED**
 
-  Run: `py -3 -c "from PIL import Image; from pathlib import Path; p=Path('Resources/FrameWiseAppIcon.png'); assert p.exists(); im=Image.open(p).convert('RGB'); assert im.size==(1024,1024); assert set(im.getdata()) <= {(16,21,27),(255,107,87),(255,255,255)}"`
+  Run an image inspection to verify the 1024×1024 dimensions and the requested black, white, and Signal Coral artwork.
 
   Expected: FAIL because the production resource files do not exist yet.
 
 - [ ] **Step 3: Create the final symbol source and raster icon**
 
-  Tighten the `FrameWise` lockup by moving the `Wise` word group from x=620 to x=590 in the approved exploratory SVG. Create the white-tile icon SVG by scaling the Open Crop symbol to the 256px viewBox, keeping the framing geometry Ink, retaining the Signal Coral center diamond, and placing it on a full-bleed White background. Rasterize that SVG at 1024×1024 with the logo-design renderer; do not add gradients, shadows, or antialiasing colors to the source geometry.
+  Tighten the `FrameWise` lockup by moving the `Wise` word group from x=620 to x=590 in the approved exploratory SVG. Create the app icon SVG with the existing Open Crop geometry, a full-bleed black background, a white frame, and the Signal Coral center diamond. Rasterize that SVG at 1024×1024 without adding gradients or shadows.
 
 - [ ] **Step 4: Point xtool at the icon**
 
@@ -267,7 +267,7 @@
 - Add: `Resources/FrameWiseClearLogo.png`
 
 **Interfaces:**
-- `ContentView` overlays `BrandIntroView(isActive:)` while camera state is initializing/requesting permission, dismisses it when the camera reaches `.running` or a terminal recovery state, and never uses a fixed sleep to gate the camera.
+- `ContentView` overlays `BrandIntroView(isActive:)` during camera initialization and for a minimum 2.5-second visual opener; camera setup runs immediately, and terminal recovery states dismiss the opener without waiting.
 
 - [ ] **Step 1: Add transition-state assertions**
 
@@ -281,7 +281,7 @@
 
 - [ ] **Step 3: Implement the opener integration and final appearance refinements**
 
-  Render the camera/recovery view underneath the opener, animate only the opener's opacity/scale, and allow reduced-motion users to see the same state change without scale movement. Use a roughly one-second normal entrance and a shorter state-driven exit without sleeping or delaying camera startup. Remove the forced dark scheme, then adapt the opener mark and recovery foreground/surface colors to the system appearance.
+  Render the camera/recovery view underneath the opener, animate its mark into place followed by the lockup, and allow reduced-motion users to see a short opacity transition without spatial movement. Keep the opener visible for at least 2.5 seconds while camera startup runs immediately; terminal recovery states dismiss it without waiting. Remove the forced dark scheme, then adapt the opener mark and recovery foreground/surface colors to the system appearance.
 
 - [ ] **Step 4: Run all host tests and build**
 

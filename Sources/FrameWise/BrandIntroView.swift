@@ -12,52 +12,88 @@ struct BrandIntroView: View {
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @Environment(\.colorScheme) private var colorScheme
     @State private var hasEntered = false
+    @State private var hasLockupEntered = false
 
-    /// The longer entrance lets the lockup read as an intentional opener even
-    /// when the camera is already warm. It remains state-driven: there is no
-    /// artificial startup delay before the camera can become interactive.
+    /// A restrained spring gives the mark a soft, spatial arrival without
+    /// making the premium wordmark feel bouncy.
     private var entranceAnimation: Animation {
         accessibilityReduceMotion
             ? .easeInOut(duration: 0.2)
-            : .easeOut(duration: 1.05)
+            : .spring(response: 0.9, dampingFraction: 0.88)
+    }
+
+    /// The wordmark follows the symbol so the two parts read as one sequence.
+    private var lockupEntranceAnimation: Animation {
+        accessibilityReduceMotion
+            ? .easeInOut(duration: 0.2)
+            : .easeOut(duration: 0.7).delay(0.16)
     }
 
     private var exitAnimation: Animation {
         accessibilityReduceMotion
             ? .easeInOut(duration: 0.2)
-            : .easeInOut(duration: 0.65)
+            : .easeInOut(duration: 0.35)
     }
 
     var body: some View {
         ZStack {
             FrameWiseBrand.surface(for: colorScheme)
+                .opacity(isActive ? 1 : 0)
                 .ignoresSafeArea()
+                .animation(exitAnimation, value: isActive)
 
             VStack(spacing: 22) {
                 OpenCropSymbol()
                     .frame(width: 88, height: 88)
+                    .opacity(hasEntered ? 1 : 0)
+                    .scaleEffect(
+                        accessibilityReduceMotion || hasEntered ? 1 : 0.9
+                    )
+                    .offset(
+                        y: accessibilityReduceMotion || hasEntered ? 0 : 14
+                    )
+                    .animation(
+                        isActive ? entranceAnimation : exitAnimation,
+                        value: hasEntered
+                    )
 
                 FrameWiseLockup()
+                    .opacity(hasLockupEntered ? 1 : 0)
+                    .offset(
+                        y: accessibilityReduceMotion || hasLockupEntered ? 0 : 8
+                    )
+                    .animation(
+                        isActive ? lockupEntranceAnimation : exitAnimation,
+                        value: hasLockupEntered
+                    )
             }
             .padding(.horizontal, 24)
-            .scaleEffect(
-                accessibilityReduceMotion || hasEntered
-                    ? 1
-                    : 0.96
-            )
         }
-        .opacity(hasEntered ? 1 : 0)
         .allowsHitTesting(false)
         .accessibilityHidden(!isActive)
         .onAppear {
-            withAnimation(isActive ? entranceAnimation : exitAnimation) {
-                hasEntered = isActive
-            }
+            setEntranceActive(isActive)
         }
         .onChange(of: isActive) { _, newValue in
-            withAnimation(newValue ? entranceAnimation : exitAnimation) {
-                hasEntered = newValue
+            if newValue {
+                setEntranceActive(true)
+            } else {
+                withAnimation(exitAnimation) {
+                    hasEntered = false
+                    hasLockupEntered = false
+                }
             }
+        }
+    }
+
+    private func setEntranceActive(_ active: Bool) {
+        guard active else { return }
+
+        withAnimation(entranceAnimation) {
+            hasEntered = true
+        }
+        withAnimation(lockupEntranceAnimation) {
+            hasLockupEntered = true
         }
     }
 }

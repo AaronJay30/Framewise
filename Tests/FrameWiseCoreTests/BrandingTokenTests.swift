@@ -26,4 +26,47 @@ final class BrandingTokenTests: XCTestCase {
             )
         }
     }
+
+    func testBrandIntroHonorsItsMinimumDisplayDuration() {
+        XCTAssertEqual(FrameWiseBrandToken.minimumBrandIntroDuration, 2.5)
+        XCTAssertTrue(
+            FrameWiseBrandToken.shouldShowBrandIntro(
+                for: .running,
+                minimumDurationElapsed: false
+            )
+        )
+        XCTAssertFalse(
+            FrameWiseBrandToken.shouldShowBrandIntro(
+                for: .running,
+                minimumDurationElapsed: true
+            )
+        )
+        XCTAssertTrue(
+            FrameWiseBrandToken.shouldShowBrandIntro(
+                for: .initializing,
+                minimumDurationElapsed: true
+            )
+        )
+    }
+
+    func testTerminalRecoveryStatesCanReplaceBrandIntroImmediately() {
+        XCTAssertFalse(
+            FrameWiseBrandToken.shouldShowBrandIntro(
+                for: .permissionDenied,
+                minimumDurationElapsed: false
+            )
+        )
+        XCTAssertFalse(
+            FrameWiseBrandToken.shouldShowBrandIntro(
+                for: .unavailable,
+                minimumDurationElapsed: false
+            )
+        )
+        XCTAssertFalse(
+            FrameWiseBrandToken.shouldShowBrandIntro(
+                for: .captureFailed,
+                minimumDurationElapsed: false
+            )
+        )
+    }
 }

@@ -38,23 +38,27 @@ The following are explicitly out of scope:
 ## Branding and opener
 
 The selected Open Crop symbol is the app logo. The app icon uses a simplified
-symbol-only version on a White rounded-square tile with Ink geometry and a
-Signal Coral center diamond so it remains legible at small sizes while keeping
-the two approved brand colors visible in the mark.
+symbol-only version with a black background, white frame, and Signal Coral
+center diamond so it remains legible at small sizes.
 
 The repository also contains a separate transparent `FrameWiseClearLogo`
-symbol asset for clear-icon treatments that provide their own background. The
-white-tile icon remains the default bundle icon.
+symbol asset for clear-icon treatments that provide their own background. Its
+framing is white with the Signal Coral center diamond so it remains visible on
+Apple's darker clear-icon treatment. `xtool.yml` packages the same black-tile,
+white-frame, coral-center PNG for every appearance. iOS may still apply its
+automatic Dark and monochrome-glass Clear treatments to that image.
 
 The app opens with a branded opener while camera initialization is in
 progress. It uses the Open Crop symbol and the tightened `FrameWise` lockup
 with the `Frame` and `Wise` word groups optically closer together. In light
 mode it uses a white surface with Ink framing; in dark mode it uses a black
 surface with a white framing/`Frame` treatment. The Signal Coral center and
-`Wise` group remain fixed brand accents. The normal entrance lasts about 1.05
-seconds and the exit about 0.65 seconds, then transitions to the camera preview
-as soon as initialization is ready. There is no artificial wait added solely
-for the animation.
+`Wise` group remain fixed brand accents. The Open Crop mark settles into place
+first, then the wordmark follows. Camera startup runs immediately in parallel,
+while the opener stays visible for at least 2.5 seconds; it exits once that
+minimum has elapsed and the camera is ready. Permission, hardware, and capture
+recovery states bypass the minimum so they remain immediately visible. The
+exit takes about 0.35 seconds.
 
 Reduced Motion removes the scale movement and keeps only a simple opacity
 transition. Permission and hardware errors replace the opener with the
@@ -130,13 +134,15 @@ switch, and actual capture path.
 ## Acceptance criteria
 
 - The app opens into the camera-first layout rather than Hello World.
-- The app icon uses the Open Crop symbol-only mark with the approved Ink and
-  Signal Coral colors.
+- The app icon uses a black background, white Open Crop frame, and Signal
+  Coral center.
 - A separate transparent Open Crop logo asset exists for clear-icon contexts,
-  while the default app icon remains the white-tile version.
-- The opener presents the tightened FrameWise lockup with a readable,
-  approximately one-second entrance and fades into the camera without an
-  artificial delay.
+  while the default PNG is packaged directly through xtool's `iconPath`.
+- The opener animates the Open Crop mark into place, then brings in the
+  tightened FrameWise lockup; it remains visible for at least 2.5 seconds
+  while camera startup runs in parallel.
+- Permission, unavailable-hardware, and capture-failure recovery states can
+  replace the opener immediately, even before the minimum display time ends.
 - The opener and recovery surfaces adapt to the system light/dark appearance.
 - A user can grant camera access and see a live preview.
 - A user can switch between rear and front cameras when both are available.

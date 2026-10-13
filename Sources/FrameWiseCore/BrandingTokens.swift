@@ -9,6 +9,10 @@ public enum FrameWiseBrandToken {
     /// Signal Coral used for the focal diamond and wordmark accent.
     public static let signalCoralHex = "#FF6B57"
 
+    /// Minimum time the opening brand animation remains visible while the
+    /// camera starts in parallel.
+    public static let minimumBrandIntroDuration: Double = 2.5
+
     /// Whether the branded opener should remain visible for a camera state.
     public static func shouldShowBrandIntro(for state: CameraState) -> Bool {
         switch state {
@@ -16,6 +20,24 @@ public enum FrameWiseBrandToken {
             true
         case .permissionDenied, .unavailable, .ready, .running, .captureFailed:
             false
+        }
+    }
+
+    /// Keep the opener visible until both its minimum display time has passed
+    /// and camera startup no longer needs it.
+    public static func shouldShowBrandIntro(
+        for state: CameraState,
+        minimumDurationElapsed: Bool
+    ) -> Bool {
+        if minimumDurationElapsed {
+            return shouldShowBrandIntro(for: state)
+        }
+
+        return switch state {
+        case .permissionDenied, .unavailable, .captureFailed:
+            false
+        case .initializing, .requestingPermission, .ready, .running:
+            true
         }
     }
 }

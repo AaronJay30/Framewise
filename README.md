@@ -75,11 +75,12 @@ in `CameraService`, while SwiftUI reads state through `CameraViewModel`.
 The bundle ID in `xtool.yml` is still the generated placeholder and should be
 changed before distributing the app.
 
-The default `xtool` app icon is the white-tile `FrameWiseAppIcon.png`. The
-transparent `FrameWiseClearLogo.png` is a separate clear-icon treatment for
-contexts that provide their own background; it is not used as the default
-bundle icon. The opener and recovery surfaces follow the device's system
-light/dark appearance, while the Ink and Signal Coral brand tokens stay fixed.
+The app icon is a single PNG with a black background, white Open Crop frame,
+and Signal Coral center, packaged through `iconPath` in `xtool.yml`. iOS may
+still apply its own Dark and Clear Home Screen styling; Clear presentation is
+rendered as monochrome glass. The opener and recovery surfaces follow the
+device's system light/dark appearance, while the Ink and Signal Coral brand
+tokens stay fixed.
 
 ## Normal development commands
 

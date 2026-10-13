@@ -56,14 +56,19 @@ the opener active. Permission, hardware, and capture failures therefore
 replace the opener with a recovery state instead of trapping the user behind
 branding.
 
-The SwiftUI branding files will turn those tokens into reusable symbol and
-lockup views. The app icon uses the symbol-only asset; the opener uses the
-tightened `FrameWise` lockup. `Resources/FrameWiseAppIcon.png` is the default
-white-tile icon, while `Resources/FrameWiseClearLogo.png` is a transparent
-companion for clear-icon contexts. `FrameWiseBrand` chooses a light or dark
-surface and a contrasting framing/wordmark color from the system color scheme.
-The normal opener entrance lasts about one second, but it still follows the
-camera state rather than adding a fixed startup delay.
+The SwiftUI branding files turn those tokens into reusable symbol and lockup
+views. The app icon uses the symbol-only asset; the opener uses the tightened
+`FrameWise` lockup. `Resources/FrameWiseAppIcon.png` is the single icon source:
+black background, white frame, and coral center. `xtool.yml` packages it
+directly through `iconPath`, avoiding the experimental asset-catalog compiler.
+iOS may still render Dark and Clear Home Screen treatments automatically;
+Clear is presented as monochrome glass. `FrameWiseBrand` chooses a light or
+dark surface and a contrasting framing/wordmark color from the system color
+scheme.
+The opener mark settles into place first, then the wordmark follows. The
+camera starts immediately in parallel, while the opener stays visible for at
+least 2.5 seconds and longer only if camera startup is still in progress.
+Reduce Motion replaces the spatial entrance with a short opacity transition.
 
 ## How to verify the core
 
