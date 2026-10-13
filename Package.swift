@@ -18,7 +18,15 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "FrameWise"
+            name: "FrameWise",
+            dependencies: ["FrameWiseCore"]
+        ),
+        .target(
+            name: "FrameWiseCore"
+        ),
+        .testTarget(
+            name: "FrameWiseCoreTests",
+            dependencies: ["FrameWiseCore"]
         ),
     ]
 )
