@@ -38,8 +38,9 @@ The following are explicitly out of scope:
 ## Branding and opener
 
 The selected Open Crop symbol is the app logo. The app icon uses a simplified
-symbol-only version on a Signal Coral rounded-square tile with Ink geometry so
-it remains legible at small sizes and uses only the two approved brand colors.
+symbol-only version on a White rounded-square tile with Ink geometry and a
+Signal Coral center diamond so it remains legible at small sizes while keeping
+the two approved brand colors visible in the mark.
 
 The app opens with a short branded opener while camera initialization is in
 progress. It uses an Ink background, the Open Crop symbol, and the tightened

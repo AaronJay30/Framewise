@@ -8,6 +8,6 @@
     <polygon fill="#FF6B57" points="128,96 160,128 128,160 96,128"/>
   </g>
   <g id="wordmark" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="92" font-weight="700" letter-spacing="-3">
-    <text x="300" y="164" fill="#10151B">Frame</text><text x="620" y="164" fill="#FF6B57">Wise</text>
+    <text x="300" y="164" fill="#10151B">Frame</text><text x="590" y="164" fill="#FF6B57">Wise</text>
   </g>
 </svg>

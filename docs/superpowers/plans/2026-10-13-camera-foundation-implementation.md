@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Support the package's existing platform floors: iOS 17 and macOS 14.
-- Use only the approved logo colors: Ink `#10151B` and Signal Coral `#FF6B57` for the app icon and brand artwork.
+- Use the approved brand colors Ink `#10151B` and Signal Coral `#FF6B57` for the mark and artwork; the app icon may use neutral White `#FFFFFF` as its tile background.
 - The selected Open Crop symbol is the app logo; the tightened `Frame`/`Wise` lockup is for the opener.
 - The opener fades in while camera initialization is in progress and must not add an artificial wait.
 - Reduced Motion removes scale movement and retains only an opacity transition.
@@ -87,7 +87,7 @@
 
 **Interfaces:**
 - Produces `Resources/FrameWiseAppIcon.png` at exactly 1024×1024 for `xtool.yml`'s `iconPath`.
-- The icon is a full-bleed Signal Coral tile with a simplified, symbol-only Ink Open Crop mark; the two-color reduction is intentional for small-size legibility.
+- The icon is a full-bleed White tile with a simplified, symbol-only Ink Open Crop mark and Signal Coral center diamond; the neutral tile keeps the small-size mark crisp.
 
 - [ ] **Step 1: Write the asset validation check**
 
@@ -95,13 +95,13 @@
 
 - [ ] **Step 2: Run the validation to verify RED**
 
-  Run: `py -3 -c "from PIL import Image; from pathlib import Path; p=Path('Resources/FrameWiseAppIcon.png'); assert p.exists(); im=Image.open(p).convert('RGB'); assert im.size==(1024,1024); assert set(im.getdata()) <= {(16,21,27),(255,107,87)}"`
+  Run: `py -3 -c "from PIL import Image; from pathlib import Path; p=Path('Resources/FrameWiseAppIcon.png'); assert p.exists(); im=Image.open(p).convert('RGB'); assert im.size==(1024,1024); assert set(im.getdata()) <= {(16,21,27),(255,107,87),(255,255,255)}"`
 
   Expected: FAIL because the production resource files do not exist yet.
 
 - [ ] **Step 3: Create the final symbol source and raster icon**
 
-  Tighten the `FrameWise` lockup by moving the `Wise` word group from x=620 to x=590 in the approved exploratory SVG. Create the coral-tile icon SVG by scaling the Open Crop symbol to the 256px viewBox, replacing both symbol colors with Ink for the small-size mark, and placing it on a full-bleed Signal Coral background. Rasterize that SVG at 1024×1024 with the logo-design renderer; do not add gradients, shadows, or antialiasing colors to the source geometry.
+  Tighten the `FrameWise` lockup by moving the `Wise` word group from x=620 to x=590 in the approved exploratory SVG. Create the white-tile icon SVG by scaling the Open Crop symbol to the 256px viewBox, keeping the framing geometry Ink, retaining the Signal Coral center diamond, and placing it on a full-bleed White background. Rasterize that SVG at 1024×1024 with the logo-design renderer; do not add gradients, shadows, or antialiasing colors to the source geometry.
 
 - [ ] **Step 4: Point xtool at the icon**
 
@@ -111,7 +111,7 @@
 
   Run the PNG/XML checks and `py -3 C:\Users\User\.codex\skills\logo-design\scripts\svg_audit.py Resources/FrameWiseAppIcon.svg docs/brand/logo-concepts/concept-a-open-crop-lockup.svg`.
 
-  Expected: the PNG checks pass and the icon/lockup contain only the approved flat colors; the lockup may still report exploratory live text until the UI lockup is represented by SwiftUI text.
+  Expected: the PNG checks pass and the icon/lockup contain only the approved flat colors plus the neutral White icon background; the lockup may still report exploratory live text until the UI lockup is represented by SwiftUI text.
 
 - [ ] **Step 6: Commit the app-icon assets**
 

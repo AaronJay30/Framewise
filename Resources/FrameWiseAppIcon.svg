@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="title">
+  <title id="title">FrameWise Open Crop app icon</title>
+  <rect width="256" height="256" fill="#FFFFFF"/>
+  <g id="symbol" fill="#10151B">
+    <path d="M44 102V72c0-18.8 15.2-34 34-34h30v20H80c-7.7 0-14 6.3-14 14v30H44Z"/>
+    <path d="M154 38h30c18.8 0 34 15.2 34 34v30h-22V72c0-7.7-6.3-14-14-14h-28V38Z"/>
+    <path d="M44 154h22v30c0 7.7 6.3 14 14 14h28v20H78c-18.8 0-34-15.2-34-34v-30Z"/>
+    <path d="M198 154h20v30c0 18.8-15.2 34-34 34h-30v-20h28c7.7 0 14-6.3 14-14v-30h22Z"/>
+    <polygon fill="#FF6B57" points="128,96 160,128 128,160 96,128"/>
+  </g>
+</svg>
