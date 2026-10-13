@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the starter screen with a branded, camera-first iOS shell using the selected Open Crop logo, a fade-in FrameWise opener, live preview, still capture, camera switching, and a rounded three-control dock.
+**Goal:** Replace the starter screen with a branded, camera-first iOS shell using the selected Open Crop logo, a readable state-driven FrameWise opener, live preview, still capture, camera switching, and a rounded three-control dock.
 
-**Architecture:** Keep camera hardware behind `CameraService` and the SwiftUI-facing state in `CameraViewModel`. Put permission/session state reduction in a small `FrameWiseCore` target so it can be tested without AVFoundation or a physical camera. Render the logo as reusable SwiftUI geometry for the opener, and use a generated 1024px symbol-only PNG through `xtool.yml` for the app icon.
+**Architecture:** Keep camera hardware behind `CameraService` and the SwiftUI-facing state in `CameraViewModel`. Put permission/session state reduction in a small `FrameWiseCore` target so it can be tested without AVFoundation or a physical camera. Render the logo as reusable SwiftUI geometry for the opener, use a generated 1024px symbol-only PNG through `xtool.yml` for the default app icon, and keep a separate transparent symbol asset for clear-icon contexts.
 
 **Tech Stack:** Swift 6, SwiftUI, AVFoundation, UIKit preview layer, Swift Package Manager, XCTest, xtool, and the approved flat Ink/Signal Coral SVG/PNG assets.
 
@@ -14,8 +14,10 @@
 
 - Support the package's existing platform floors: iOS 17 and macOS 14.
 - Use the approved brand colors Ink `#10151B` and Signal Coral `#FF6B57` for the mark and artwork; the app icon may use neutral White `#FFFFFF` as its tile background.
+- Keep the white-tile app icon as the default bundle icon and provide a transparent clear-logo companion asset without changing the default icon path.
 - The selected Open Crop symbol is the app logo; the tightened `Frame`/`Wise` lockup is for the opener.
-- The opener fades in while camera initialization is in progress and must not add an artificial wait.
+- The opener fades in for about one second while camera initialization is in progress and must not add an artificial wait.
+- Opener and recovery surfaces follow the system light/dark appearance; fixed brand tokens remain unchanged.
 - Reduced Motion removes scale movement and retains only an opacity transition.
 - The bottom dock contains only library, shutter, and camera-flip controls.
 - Captured photos must not contain UI, logo, guidance, or reference overlays.
@@ -252,13 +254,17 @@
   git commit -m "feat: add camera-first interface"
   ```
 
-### Task 6: Integrate opener-to-camera transition and verify on device
+### Task 6: Integrate opener-to-camera transition, appearance, and verify on device
 
 **Files:**
 - Modify: `Sources/FrameWise/ContentView.swift`
 - Modify: `Sources/FrameWise/CameraScreen.swift`
+- Modify: `Sources/FrameWise/Branding.swift`
+- Modify: `Sources/FrameWise/BrandIntroView.swift`
 - Modify: `README.md`
 - Test: `Tests/FrameWiseCoreTests/CameraStateReducerTests.swift`
+- Add: `Resources/FrameWiseClearLogo.svg`
+- Add: `Resources/FrameWiseClearLogo.png`
 
 **Interfaces:**
 - `ContentView` overlays `BrandIntroView(isActive:)` while camera state is initializing/requesting permission, dismisses it when the camera reaches `.running` or a terminal recovery state, and never uses a fixed sleep to gate the camera.
@@ -273,9 +279,9 @@
 
   Expected: FAIL until the integration mapping is represented in the testable state contract.
 
-- [ ] **Step 3: Implement the opener integration**
+- [ ] **Step 3: Implement the opener integration and final appearance refinements**
 
-  Render the camera/recovery view underneath the opener, animate only the opener's opacity/scale, and allow reduced-motion users to see the same state change without scale movement.
+  Render the camera/recovery view underneath the opener, animate only the opener's opacity/scale, and allow reduced-motion users to see the same state change without scale movement. Use a roughly one-second normal entrance and a shorter state-driven exit without sleeping or delaying camera startup. Remove the forced dark scheme, then adapt the opener mark and recovery foreground/surface colors to the system appearance.
 
 - [ ] **Step 4: Run all host tests and build**
 

@@ -1,5 +1,6 @@
 #if canImport(UIKit) && canImport(AVFoundation) && canImport(SwiftUI)
 import AVFoundation
+import FrameWiseCore
 import SwiftUI
 
 /// The composition root for the camera-first experience.
@@ -11,11 +12,16 @@ struct ContentView: View {
     @StateObject private var viewModel = CameraViewModel()
 
     var body: some View {
-        CameraScreen(viewModel: viewModel)
-            .task {
-                viewModel.start()
-            }
-            .preferredColorScheme(.dark)
+        ZStack {
+            CameraScreen(viewModel: viewModel)
+
+            BrandIntroView(
+                isActive: FrameWiseBrandToken.shouldShowBrandIntro(for: viewModel.state)
+            )
+        }
+        .task {
+            viewModel.start()
+        }
     }
 }
 #endif

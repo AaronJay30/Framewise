@@ -10,6 +10,19 @@ import FrameWiseCore
 enum FrameWiseBrand {
     static let ink = Color(hex: FrameWiseBrandToken.inkHex)
     static let signalCoral = Color(hex: FrameWiseBrandToken.signalCoralHex)
+
+    /// Background used by the opener and camera recovery states.
+    ///
+    /// The logo colors remain fixed brand tokens, but app surfaces follow the
+    /// user's system appearance so the mark stays legible in both themes.
+    static func surface(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? .black : .white
+    }
+
+    /// Foreground color that has enough contrast against the current surface.
+    static func foreground(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? .white : ink
+    }
 }
 
 private extension Color {
@@ -27,13 +40,15 @@ private extension Color {
 
 /// The Open Crop symbol used by the app icon and the branded opener.
 struct OpenCropSymbol: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         GeometryReader { proxy in
             let dimension = min(proxy.size.width, proxy.size.height)
 
             ZStack {
                 OpenCropMarkShape()
-                    .fill(FrameWiseBrand.ink)
+                    .fill(FrameWiseBrand.foreground(for: colorScheme))
                 OpenCropDiamondShape()
                     .fill(FrameWiseBrand.signalCoral)
             }
@@ -48,10 +63,12 @@ struct OpenCropSymbol: View {
 
 /// The tightened FrameWise wordmark for the opener.
 struct FrameWiseLockup: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         HStack(spacing: -6) {
             Text("Frame")
-                .foregroundStyle(FrameWiseBrand.ink)
+                .foregroundStyle(FrameWiseBrand.foreground(for: colorScheme))
                 .kerning(-2)
             Text("Wise")
                 .foregroundStyle(FrameWiseBrand.signalCoral)

@@ -58,7 +58,12 @@ branding.
 
 The SwiftUI branding files will turn those tokens into reusable symbol and
 lockup views. The app icon uses the symbol-only asset; the opener uses the
-tightened `FrameWise` lockup.
+tightened `FrameWise` lockup. `Resources/FrameWiseAppIcon.png` is the default
+white-tile icon, while `Resources/FrameWiseClearLogo.png` is a transparent
+companion for clear-icon contexts. `FrameWiseBrand` chooses a light or dark
+surface and a contrasting framing/wordmark color from the system color scheme.
+The normal opener entrance lasts about one second, but it still follows the
+camera state rather than adding a fixed startup delay.
 
 ## How to verify the core
 

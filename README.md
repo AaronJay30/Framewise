@@ -4,14 +4,18 @@ FrameWise is an offline-first iOS camera app that helps users compose better
 photos in real time. It will combine a custom camera, composition overlays,
 reference-photo alignment, and on-device AI guidance.
 
-> Current state: the Windows + WSL2 + xtool development pipeline is set up
-> and the starter app has been built, installed, trusted, and opened on a
-> physical iPhone. Camera and AI features are not implemented yet.
+> Current state: the Windows + WSL2 + xtool development pipeline is set up,
+> and the branded camera foundation is implemented. The iOS app builds with
+> the Open Crop icon, state-driven opener, camera permission recovery, live
+> preview shell, still capture service, rounded three-control dock, system
+> light/dark appearance support, and a transparent clear-logo companion asset.
 
 ## Product and design documents
 
 - [Product design](docs/superpowers/specs/2026-10-12-ai-composition-camera-design.md)
 - [Layout and visual design](docs/superpowers/specs/2026-10-12-framewise-layout-design.md)
+- [Camera foundation design](docs/superpowers/specs/2026-10-13-camera-foundation-design.md)
+- [Code walkthrough](docs/code-walkthrough.md)
 
 ## Verified setup
 
@@ -24,8 +28,10 @@ Verified on 2026-10-12 from Ubuntu running under WSL2:
 - xtool Apple authentication completed.
 - Physical iPhone detected by `idevice_id` and `xtool devices --usb`.
 - Starter SwiftUI app built successfully with `xtool dev`.
-- App installation reached verification; Developer Mode and the developer
-  profile were trusted on the iPhone, and the app opened.
+- The current camera foundation builds successfully with `xtool dev build`.
+- Physical-device camera verification is the next validation step for this
+  slice; personal Apple account details and the device UDID are not stored in
+  this repository.
 
 Personal Apple account details and the device UDID are intentionally not
 stored in this repository.
@@ -37,16 +43,43 @@ FrameWise/
 ├── Package.swift
 ├── xtool.yml
 ├── Sources/
-│   └── FrameWise/
-│       ├── FrameWiseApp.swift
-│       └── ContentView.swift
+│   ├── FrameWise/
+│   │   ├── FrameWiseApp.swift
+│   │   ├── ContentView.swift
+│   │   ├── Branding.swift
+│   │   ├── BrandIntroView.swift
+│   │   ├── CameraService.swift
+│   │   ├── CameraViewModel.swift
+│   │   ├── CameraPreview.swift
+│   │   └── CameraScreen.swift
+│   └── FrameWiseCore/
+│       ├── CameraState.swift
+│       ├── CameraStateReducer.swift
+│       └── BrandingTokens.swift
+├── Tests/FrameWiseCoreTests/
+│   ├── CameraStateReducerTests.swift
+│   └── BrandingTokenTests.swift
+├── Resources/
+│   ├── FrameWiseAppIcon.svg
+│   ├── FrameWiseAppIcon.png
+│   ├── FrameWiseClearLogo.svg
+│   └── FrameWiseClearLogo.png
+├── FrameWise-Info.plist
 └── docs/
     └── superpowers/specs/
 ```
 
-The current source is still the generated Hello World screen. The bundle ID
-in `xtool.yml` is also still the generated placeholder and should be changed
-before distributing the app.
+The core state target is hardware-independent so the reducer tests run on the
+host. The camera target is the iOS-facing layer; its AVFoundation work stays
+in `CameraService`, while SwiftUI reads state through `CameraViewModel`.
+The bundle ID in `xtool.yml` is still the generated placeholder and should be
+changed before distributing the app.
+
+The default `xtool` app icon is the white-tile `FrameWiseAppIcon.png`. The
+transparent `FrameWiseClearLogo.png` is a separate clear-icon treatment for
+contexts that provide their own background; it is not used as the default
+bundle icon. The opener and recovery surfaces follow the device's system
+light/dark appearance, while the Ink and Signal Coral brand tokens stay fixed.
 
 ## Normal development commands
 
@@ -196,9 +229,9 @@ Developer Mode is under **Settings → Privacy & Security → Developer Mode**.
 
 ## What is next
 
-1. Replace the generated `ContentView` with a custom camera preview using
-   AVFoundation.
-2. Add camera permission handling and still-photo capture.
+1. Verify the branded opener, permission recovery, camera switching, and
+   still capture on a connected iPhone, including Reduced Motion.
+2. Replace the library placeholder with a local captured-photo surface.
 3. Add rule-of-thirds, golden spiral/Fibonacci, and horizon overlays.
 4. Add the AI Guide UI: subject marker, target dot, arrow, and short label.
 5. Add reference-photo overlay with opacity, scale, position, and lock.
@@ -206,8 +239,8 @@ Developer Mode is under **Settings → Privacy & Security → Developer Mode**.
 7. Add the composition recommendation and alignment engine.
 8. Ensure saved photos exclude all guides, arrows, labels, and reference
    overlays.
-9. Add device testing for permissions, low confidence, alignment stability,
-   battery use, and reduced motion.
+9. Add device testing for low confidence, alignment stability, battery use,
+   and reduced motion.
 
 ## Product rules to preserve
 

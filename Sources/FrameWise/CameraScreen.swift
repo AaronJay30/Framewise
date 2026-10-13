@@ -11,12 +11,13 @@ struct CameraScreen: View {
     @ObservedObject var viewModel: CameraViewModel
 
     @Environment(\.openURL) private var openURL
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ZStack {
             cameraContent
         }
-        .background(FrameWiseBrand.ink.ignoresSafeArea())
+        .background(FrameWiseBrand.surface(for: colorScheme).ignoresSafeArea())
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if showsControlDock {
                 controlDock
@@ -158,6 +159,8 @@ private struct RecoveryStateView: View {
     let actionTitle: String
     let action: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: symbolName)
@@ -166,11 +169,11 @@ private struct RecoveryStateView: View {
 
             Text(title)
                 .font(.title3.weight(.semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(FrameWiseBrand.foreground(for: colorScheme))
 
             Text(message)
                 .font(.body)
-                .foregroundStyle(.white.opacity(0.78))
+                .foregroundStyle(FrameWiseBrand.foreground(for: colorScheme).opacity(0.78))
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 310)
 

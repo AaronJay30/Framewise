@@ -41,4 +41,12 @@ final class CameraStateReducerTests: XCTestCase {
 
         XCTAssertEqual(next, .initializing)
     }
+
+    func testBrandIntroFollowsTheCameraLifecycle() {
+        XCTAssertTrue(FrameWiseBrandToken.shouldShowBrandIntro(for: .initializing))
+        XCTAssertTrue(FrameWiseBrandToken.shouldShowBrandIntro(for: .requestingPermission))
+        XCTAssertFalse(FrameWiseBrandToken.shouldShowBrandIntro(for: .running))
+        XCTAssertFalse(FrameWiseBrandToken.shouldShowBrandIntro(for: .permissionDenied))
+        XCTAssertFalse(FrameWiseBrandToken.shouldShowBrandIntro(for: .unavailable))
+    }
 }

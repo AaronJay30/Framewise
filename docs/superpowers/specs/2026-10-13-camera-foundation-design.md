@@ -42,12 +42,19 @@ symbol-only version on a White rounded-square tile with Ink geometry and a
 Signal Coral center diamond so it remains legible at small sizes while keeping
 the two approved brand colors visible in the mark.
 
-The app opens with a short branded opener while camera initialization is in
-progress. It uses an Ink background, the Open Crop symbol, and the tightened
-`FrameWise` lockup with the `Frame` and `Wise` word groups optically closer
-together. The lockup fades and scales in gently, then transitions to the
-camera preview as soon as initialization is ready. There is no artificial
-wait added solely for the animation.
+The repository also contains a separate transparent `FrameWiseClearLogo`
+symbol asset for clear-icon treatments that provide their own background. The
+white-tile icon remains the default bundle icon.
+
+The app opens with a branded opener while camera initialization is in
+progress. It uses the Open Crop symbol and the tightened `FrameWise` lockup
+with the `Frame` and `Wise` word groups optically closer together. In light
+mode it uses a white surface with Ink framing; in dark mode it uses a black
+surface with a white framing/`Frame` treatment. The Signal Coral center and
+`Wise` group remain fixed brand accents. The normal entrance lasts about 1.05
+seconds and the exit about 0.65 seconds, then transitions to the camera preview
+as soon as initialization is ready. There is no artificial wait added solely
+for the animation.
 
 Reduced Motion removes the scale movement and keeps only a simple opacity
 transition. Permission and hardware errors replace the opener with the
@@ -117,15 +124,20 @@ switch, and actual capture path.
 - The control dock and recovery actions support Dynamic Type without covering
   the preview or home indicator.
 - The opener's symbol, wordmark, and animation remain readable with Reduced
-  Motion enabled.
+  Motion enabled, and the opener/recovery surfaces follow the system light or
+  dark appearance.
 
 ## Acceptance criteria
 
 - The app opens into the camera-first layout rather than Hello World.
 - The app icon uses the Open Crop symbol-only mark with the approved Ink and
   Signal Coral colors.
-- The opener presents the tightened FrameWise lockup and fades into the camera
-  without an artificial delay.
+- A separate transparent Open Crop logo asset exists for clear-icon contexts,
+  while the default app icon remains the white-tile version.
+- The opener presents the tightened FrameWise lockup with a readable,
+  approximately one-second entrance and fades into the camera without an
+  artificial delay.
+- The opener and recovery surfaces adapt to the system light/dark appearance.
 - A user can grant camera access and see a live preview.
 - A user can switch between rear and front cameras when both are available.
 - A user can capture a still photo without guidance UI burned into it.
