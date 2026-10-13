@@ -1,3 +1,4 @@
 version: 1
 bundleID: com.example.FrameWise
 iconPath: Resources/FrameWiseAppIcon.png
+infoPath: FrameWise-Info.plist

@@ -1,20 +1,21 @@
-#if canImport(SwiftUI)
+#if canImport(UIKit) && canImport(AVFoundation) && canImport(SwiftUI)
+import AVFoundation
 import SwiftUI
 
-/// The root view for FrameWise.
+/// The composition root for the camera-first experience.
 ///
-/// This starter body will become the camera shell. The view should compose
-/// screen-level pieces, while camera setup and state transitions stay in the
-/// view model and service layers.
+/// It owns one view model for the lifetime of the screen and starts camera
+/// setup from SwiftUI's lifecycle. AVFoundation configuration stays in the
+/// service, not in this view.
 struct ContentView: View {
+    @StateObject private var viewModel = CameraViewModel()
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-        }
-        .padding()
+        CameraScreen(viewModel: viewModel)
+            .task {
+                viewModel.start()
+            }
+            .preferredColorScheme(.dark)
     }
 }
 #endif
