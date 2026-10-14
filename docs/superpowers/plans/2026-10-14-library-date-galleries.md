@@ -69,4 +69,4 @@
 
 - [x] Document date-group and All Photos gallery navigation plus the smoother capture flight.
 - [x] Run `swift test`, `xtool dev build`, and `git diff --check`.
-- [ ] Review the final diff for unnecessary abstractions, then commit and push the worktree branch for merge into `main`.
+- [x] Review the final diff for unnecessary abstractions, then commit and push the worktree branch for merge into `main`.
