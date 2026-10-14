@@ -8,12 +8,28 @@ struct PhotoPreviewView: View {
 
     @ObservedObject var photoStore: CapturedPhotoStore
 
+    private let photoLibraryWriter: PhotoLibraryWriter
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @State private var isSharePresented = false
     @State private var isDeleteConfirmationPresented = false
     @State private var isDeleting = false
+    @State private var isExporting = false
+    @State private var didExportInThisPreview = false
     @State private var actionError: String?
+    @State private var exportMessage: String?
+    @State private var shouldShowPhotoSettings = false
+
+    init(
+        photoID: UUID,
+        photoStore: CapturedPhotoStore,
+        photoLibraryWriter: PhotoLibraryWriter = PhotoLibraryWriter()
+    ) {
+        self.photoID = photoID
+        self.photoStore = photoStore
+        self.photoLibraryWriter = photoLibraryWriter
+    }
 
     var body: some View {
         Group {
@@ -62,6 +78,21 @@ struct PhotoPreviewView: View {
                         .frame(maxWidth: 320)
                 }
 
+                if let exportMessage {
+                    Text(exportMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.82))
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 320)
+                }
+
+                if shouldShowPhotoSettings {
+                    Button("Open Settings", action: openPhotoSettings)
+                        .buttonStyle(.bordered)
+                        .tint(.white)
+                        .frame(minHeight: 44)
+                }
+
                 HStack(spacing: 10) {
                     actionButton(
                         title: "Share",
@@ -70,12 +101,16 @@ struct PhotoPreviewView: View {
                     )
 
                     actionButton(
-                        title: "Save",
+                        title: saveTitle(for: photo),
                         systemImage: "square.and.arrow.down",
-                        action: {},
-                        isDisabled: true
+                        action: { saveToPhotos(photo) },
+                        isDisabled: isExporting || didExportInThisPreview || photo.isExported
                     )
-                    .accessibilityHint("Saving to Photos will be available soon.")
+                    .accessibilityHint(
+                        photo.isExported || didExportInThisPreview
+                            ? "This photo is already saved to Photos."
+                            : "Exports a copy to Photos."
+                    )
 
                     actionButton(
                         title: isDeleting ? "Deleting…" : "Delete",
@@ -159,6 +194,44 @@ struct PhotoPreviewView: View {
                 isDeleting = false
             }
         }
+    }
+
+    private func saveTitle(for photo: CapturedPhoto) -> String {
+        if isExporting { return "Saving…" }
+        if photo.isExported || didExportInThisPreview { return "Saved" }
+        return "Save"
+    }
+
+    private func saveToPhotos(_ photo: CapturedPhoto) {
+        guard !isExporting, !photo.isExported, !didExportInThisPreview else { return }
+
+        isExporting = true
+        exportMessage = nil
+        shouldShowPhotoSettings = false
+
+        Task { @MainActor in
+            do {
+                try await photoLibraryWriter.save(data: photo.data)
+                didExportInThisPreview = true
+                if await photoStore.markExported(id: photoID) {
+                    exportMessage = "Saved a copy to Photos."
+                } else {
+                    exportMessage = "Saved a copy to Photos, but FrameWise could not update its export status."
+                }
+            } catch let error as PhotoLibraryWriterError {
+                exportMessage = error.errorDescription
+                shouldShowPhotoSettings = error.shouldOpenSettings
+            } catch {
+                exportMessage = "The photo could not be saved to Photos. Try again."
+            }
+
+            isExporting = false
+        }
+    }
+
+    private func openPhotoSettings() {
+        guard let settingsURL = URL(string: UIApplication.openSettingsURLString) else { return }
+        openURL(settingsURL)
     }
 }
 #endif

@@ -4,5 +4,7 @@
 <dict>
 	<key>NSCameraUsageDescription</key>
 	<string>FrameWise uses the camera to preview and capture photos.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>FrameWise exports a captured photo to Photos only when you choose Save.</string>
 </dict>
 </plist>

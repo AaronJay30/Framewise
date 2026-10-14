@@ -65,6 +65,17 @@ final class CapturedPhotoLibraryTests: XCTestCase {
         XCTAssertEqual(library.photo(withID: second.id)?.isExported, false)
     }
 
+    func testAC_PHOTO1014_ERR2_UnexportedPhotoRemainsUnexportedUntilMarkExported() {
+        let photo = makePhoto(id: "CCCCCCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC", byte: 0x03)
+        var library = CapturedPhotoLibrary()
+        library.insert(photo)
+
+        XCTAssertEqual(library.photo(withID: photo.id)?.isExported, false)
+
+        XCTAssertTrue(library.markExported(id: photo.id))
+        XCTAssertEqual(library.photo(withID: photo.id)?.isExported, true)
+    }
+
     func testAC_PHOTO1014_E1_NewLibraryIsEmpty() {
         XCTAssertTrue(CapturedPhotoLibrary().photos.isEmpty)
     }
