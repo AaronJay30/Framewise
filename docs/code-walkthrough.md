@@ -44,7 +44,7 @@ The screen flow is:
 
 ```text
 Camera
-  ├─ capture -> private app storage -> shrink/opacity flight to dock thumbnail
+  ├─ capture -> private app storage -> live-preview card shrinks to dock thumbnail
   └─ Library -> Preview
                  ├─ Share -> native UIActivityViewController
                  ├─ Save -> PhotoKit add-only export of a copy

@@ -93,9 +93,10 @@ Library, and Preview.
 ## Captured photo flow
 
 - Capture stays on Camera. After the private app-storage write succeeds, the
-  captured image briefly shrinks into the dock's Library thumbnail. Reduced
-  Motion uses an opacity-only completion transition. Rapid captures are queued
-  until each private write succeeds, and a failed write exposes a retry path.
+  live preview remains visible while a contained capture card briefly shrinks
+  into the dock's Library thumbnail. Reduced Motion uses an opacity-only
+  completion transition. Rapid captures are queued until each private write
+  succeeds, and a failed write exposes a retry path.
 - Library lists stored captures newest first and restores them after relaunch.
   Its lower-right Camera button returns to the existing camera root; it does
   not create a second camera session.

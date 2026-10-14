@@ -36,6 +36,12 @@ final class CameraStateReducerTests: XCTestCase {
         XCTAssertEqual(retrying, .initializing)
     }
 
+    func testCaptureSuccessKeepsTheCameraRunning() {
+        let next = CameraStateReducer.reduce(.running, event: .captureSucceeded)
+
+        XCTAssertEqual(next, .running)
+    }
+
     func testGrantedPermissionReturnsToInitialization() {
         let next = CameraStateReducer.reduce(.requestingPermission, event: .permissionGranted)
 
