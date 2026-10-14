@@ -4,6 +4,42 @@ Date: 2026-10-14
 
 Feature SLUG: `CAMSET1014`
 
+## Final interaction correction — 2026-10-14
+
+The latest user feedback supersedes the fixed-sensor crop-mask layout below:
+the entire preview frame must resize to square, portrait 4:3, or portrait 16:9.
+Unused space is the black camera canvas. Zoom presets remain separate touch
+targets over the preview, unaffected by its focus/pinch gestures. Exposure uses
+the compact vertical reticle control: up increases EV and down decreases it,
+with the user-facing range capped at ±2 EV. Long-pressing the reticle locks or
+unlocks focus while leaving exposure adjustable. Native preset zoom ramps
+(except with Reduce Motion), selective sensor updates, and debounced preference
+writes reduce unnecessary work during interaction. Actual smoothness still
+requires device validation.
+
+## Approved UI revision — 2026-10-14
+
+The user's later camera-reference feedback supersedes the original sheet layout
+and landscape ratios below. The approved revision uses top-bar cycling buttons
+for Flash (Off → Auto → On), Timer (Off → 3s → 5s → 10s), and Aspect
+(portrait 4:3 → square → portrait 16:9). Flash Off is the new-install/reset
+default; saved user choices remain intact. The white framing outline is removed;
+outside-crop content is dimmed with black at 52% opacity. Preview and saved-image
+crop geometry share the same portrait sensor coordinates.
+
+Exposure is a compact vertical control attached to the tap-focus reticle: up
+increases EV and down decreases it. The user-facing range is capped at ±2 EV
+even when hardware reports a wider range. Long-pressing the reticle locks or
+unlocks focus while leaving exposure adjustable. Supported zoom presets sit on
+the preview, with .5 available only on supporting hardware. Styles keep a
+separate adjustable studio panel. The bottom dock contains only
+Library/Shutter/Flip.
+Native iOS 26+ Liquid Glass follows the requested modern iOS 27 direction;
+older systems use materials and Reduce Transparency uses opaque surfaces.
+No additional settings from the reference screenshot are added.
+
+The following sections record the original implementation design for history.
+
 ## Goal
 
 Add a compact, camera-first settings surface for the first seven practical

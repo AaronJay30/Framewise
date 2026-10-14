@@ -10,8 +10,9 @@ reference-photo alignment, and on-device AI guidance.
 > camera permission recovery, live preview shell, still capture service,
 > capture-to-library flight animation, Library/Preview navigation, native Share,
 > add-only Save-to-Photos export, FrameWise-only Delete, and a disabled Edit
-> placeholder. The camera also has a compact settings sheet for Flash, Timer,
-> Exposure, Tap Focus, Aspect, Zoom, and app-defined Photographic Styles.
+> placeholder. The camera has cycling top controls, a resizable portrait preview,
+> tap-to-focus exposure control, preview zoom presets, and an adjustable style
+> studio.
 
 ## Product and design documents
 
@@ -103,18 +104,43 @@ Library, and Preview.
 
 ## Camera settings flow
 
-The Camera screen keeps the Library/Shutter/Flip dock and adds one Controls
-entry point above it. The sheet uses a horizontally scrollable row for Flash,
-Timer, Aspect, and Zoom, a full-width Exposure slider, and a separate style
-row. Tap Focus remains a direct preview gesture; pinch updates the device-
-bounded zoom range. Settings are restored from local `UserDefaults` and the
-capture service receives an immutable snapshot for each photo.
+The Camera screen puts direct cycling controls at the top: Flash
+Off → Auto → On, Timer Off → 3s → 5s → 10s, and Aspect 4:3 → 1:1 → 16:9.
+Rectangular aspects are portrait (3 wide by 4 high, or 9 wide by 16 high).
+The whole preview resizes to the selected aspect, surrounded by the black
+camera canvas without a white outline. Tapping the preview focuses at that
+point and reveals a small vertical exposure line beside the focus marker:
+swipe up to brighten and down to darken. Long-press the marker to lock or
+unlock focus. The user-facing exposure range is capped at ±2 EV even when the
+hardware exposes a wider range. Styles have their own studio panel with
+selectable looks and a 0–100% intensity control, including Reset camera
+settings.
+
+Zoom presets sit inside the preview with individual touch targets; pinch
+remains available for intermediate values. Preset changes use a native zoom
+ramp unless Reduce Motion is enabled. The rear camera prefers a virtual
+multi-lens device, and .5 appears
+only when the active camera supports it. Presets are zoom factors, not a claim
+that every value is a separate optical lens. The bottom dock contains only
+Library, Shutter, and Flip. Controls use native Liquid Glass on iOS 26+,
+standard materials on iOS 17–18, and opaque surfaces with Reduce Transparency.
+Settings are restored from local `UserDefaults`; Flash Off is the fresh-install
+and reset default, while existing saved preferences are preserved. Each capture
+receives an immutable settings snapshot.
 
 The service applies exposure, focus, and zoom on its serial session queue.
+Continuous adjustments skip unchanged sensor settings and debounce local
+preference writes; leaving the camera or resigning active flushes preferences.
 Aspect and app-defined style choices are applied at the capture-to-library
 boundary by `CameraPhotoProcessor`; `CameraPhotoProcessingPolicy` returns the
 original capture bytes whenever decoding, filtering, cropping, or encoding
 cannot complete.
+
+Physical-device checks still required for this revision: cycle all three
+aspects and compare saved framing; tap every supported zoom preset; drag the
+exposure ruler in both directions and to its limits; try rapid pinch/preset
+changes, front/back switching, VoiceOver, large text, and Reduce Motion.
+Camera frame rate and gesture responsiveness have not been measured on-device.
 
 ## Captured photo flow
 

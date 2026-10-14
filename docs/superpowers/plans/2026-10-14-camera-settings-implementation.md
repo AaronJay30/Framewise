@@ -1,5 +1,10 @@
 # Camera Settings Implementation Plan
 
+> Historical plan for the original settings sheet. The later approved camera
+> UI revision is recorded at the top of the design spec and in README's Camera
+> settings flow. Its verification adds `CameraControlTests`, portrait crop
+> regressions, and the iOS 27.1 SDK build; on-device UI/hardware checks remain.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a compact, test-backed settings flow for Flash, Timer, Exposure,

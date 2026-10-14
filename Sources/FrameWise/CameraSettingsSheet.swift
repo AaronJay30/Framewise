@@ -1,410 +1,201 @@
 #if canImport(SwiftUI) && canImport(AVFoundation)
-import Foundation
 import FrameWiseCore
 import SwiftUI
 
-// [AC-CAMSET1014-F1] [AC-CAMSET1014-F9]
+/// Styles are the only choices that need a panel; capture controls stay visible.
 struct CameraSettingsSheet: View {
     let settings: CameraSettings
-    let exposureRange: CameraExposureRange
-    let zoomRange: ClosedRange<Float>
-    let flashAvailable: Bool
     let onChange: (CameraSettings) -> Void
     let onReset: () -> Void
 
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
-    @State private var draft: CameraSettings
-
-    init(
-        settings: CameraSettings,
-        exposureRange: CameraExposureRange,
-        zoomRange: ClosedRange<Float>,
-        flashAvailable: Bool,
-        onChange: @escaping (CameraSettings) -> Void,
-        onReset: @escaping () -> Void
-    ) {
-        self.settings = settings
-        self.exposureRange = exposureRange
-        self.zoomRange = zoomRange
-        self.flashAvailable = flashAvailable
-        self.onChange = onChange
-        self.onReset = onReset
-        _draft = State(initialValue: settings)
-    }
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            header
-            quickControls
-            Divider()
-            exposureControl
-            Divider()
-            styleControl
-            Spacer(minLength: 0)
-            resetButton
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                HStack {
+                    Text("Photographic styles")
+                        .font(.title2.weight(.semibold))
+                    Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.body.weight(.semibold))
+                            .frame(width: 44, height: 44)
+                            .modifier(CameraGlass())
+                    }
+                    .accessibilityLabel("Close styles")
+                }
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(CameraPhotographicStyle.allCases, id: \.rawValue) { style in
+                            styleButton(style)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Style studio")
+                        .font(.headline)
+
+                    StyleArtwork(
+                        style: settings.photographicStyle,
+                        intensity: Double(settings.styleIntensity)
+                    )
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 172)
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+
+                    HStack {
+                        Text("Intensity")
+                            .font(.subheadline.weight(.medium))
+                        Spacer()
+                        Text("\(Int(settings.styleIntensity * 100))%")
+                            .font(.subheadline.weight(.semibold).monospacedDigit())
+                            .foregroundStyle(FrameWiseBrand.signalCoral)
+                    }
+
+                    Slider(value: intensityBinding, in: 0...1)
+                        .tint(FrameWiseBrand.signalCoral)
+                        .accessibilityLabel("Style intensity")
+                        .accessibilityValue("\(Int(settings.styleIntensity * 100)) percent")
+                }
+
+                Button(action: onReset) {
+                    Text("Reset camera settings")
+                        .font(.subheadline.weight(.medium))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .modifier(CameraGlass())
+                }
+                .accessibilityHint("Restores flash, timer, exposure, aspect, zoom, and style defaults.")
+            }
+            .padding(24)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 18)
-        .padding(.bottom, 12)
-        .background(FrameWiseBrand.surface(for: colorScheme))
-        .foregroundStyle(FrameWiseBrand.foreground(for: colorScheme))
+        .foregroundStyle(.white)
+        .buttonStyle(.plain)
+        .preferredColorScheme(.dark)
+        .presentationBackground(reduceTransparency ? AnyShapeStyle(.black) : AnyShapeStyle(.regularMaterial))
+        .presentationCornerRadius(32)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .onChange(of: settings) { _, newValue in
-            draft = newValue
-        }
-    }
-
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Camera Controls")
-                    .font(.title3.weight(.semibold))
-                Text("Tune the next capture")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            Button("Done") {
-                dismiss()
-            }
-            .font(.body.weight(.semibold))
-            .foregroundStyle(FrameWiseBrand.signalCoral)
-            .frame(minWidth: 54, minHeight: 44)
-            .accessibilityLabel("Done")
-        }
-    }
-
-    private var quickControls: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                flashControl
-                timerMenu
-                aspectMenu
-                zoomMenu
-            }
-            .padding(.vertical, 2)
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Camera choices")
-    }
-
-    private var flashMenu: some View {
-        Menu {
-            ForEach(CameraFlashMode.allCases, id: \.rawValue) { mode in
-                Button {
-                    update { $0.flashMode = mode }
-                } label: {
-                    menuChoiceLabel(mode.title, isSelected: draft.flashMode == mode)
-                }
-            }
-        } label: {
-            controlLabel(
-                symbol: "bolt.fill",
-                title: "Flash",
-                value: draft.flashMode.title
-            )
-        }
-        .accessibilityLabel("Flash, \(draft.flashMode.title)")
-    }
-
-    @ViewBuilder
-    private var flashControl: some View {
-        if flashAvailable {
-            flashMenu
-        } else {
-            controlLabel(
-                symbol: "bolt.slash.fill",
-                title: "Flash",
-                value: "Unavailable"
-            )
-            .opacity(0.56)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Flash unavailable on this camera")
-        }
-    }
-
-    private var timerMenu: some View {
-        Menu {
-            ForEach(CameraTimerDuration.allCases, id: \.rawValue) { duration in
-                Button {
-                    update { $0.timerDuration = duration }
-                } label: {
-                    menuChoiceLabel(duration.title, isSelected: draft.timerDuration == duration)
-                }
-            }
-        } label: {
-            controlLabel(
-                symbol: "timer",
-                title: "Timer",
-                value: draft.timerDuration.title
-            )
-        }
-        .accessibilityLabel("Timer, \(draft.timerDuration.title)")
-    }
-
-    private var aspectMenu: some View {
-        Menu {
-            ForEach(CameraAspectRatio.allCases, id: \.rawValue) { aspect in
-                Button {
-                    update { $0.aspectRatio = aspect }
-                } label: {
-                    menuChoiceLabel(aspect.title, isSelected: draft.aspectRatio == aspect)
-                }
-            }
-        } label: {
-            controlLabel(
-                symbol: "rectangle.inset.filled",
-                title: "Aspect",
-                value: draft.aspectRatio.title
-            )
-        }
-        .accessibilityLabel("Aspect, \(draft.aspectRatio.title)")
-    }
-
-    private var zoomMenu: some View {
-        Menu {
-            ForEach(zoomChoices, id: \.self) { zoom in
-                Button {
-                    update {
-                        $0.zoomFactor = min(
-                            max(zoom, safeZoomRange.lowerBound),
-                            safeZoomRange.upperBound
-                        )
-                    }
-                } label: {
-                    menuChoiceLabel(zoomTitle(zoom), isSelected: draft.zoomFactor == zoom)
-                }
-            }
-        } label: {
-            controlLabel(
-                symbol: "magnifyingglass",
-                title: "Zoom",
-                value: zoomTitle(clampedZoom(draft.zoomFactor))
-            )
-        }
-        .accessibilityLabel("Zoom, \(zoomTitle(clampedZoom(draft.zoomFactor)))")
-    }
-
-    private var exposureControl: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Label("Exposure", systemImage: "sun.max.fill")
-                    .font(.body.weight(.medium))
-                Spacer()
-                Text(exposureTitle(draft.exposureBias))
-                    .font(.body.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-
-            Slider(value: exposureBinding, in: safeExposureRange) {
-                Text("Exposure")
-            }
-            .tint(FrameWiseBrand.signalCoral)
-            .frame(minHeight: 44)
-            .accessibilityLabel("Exposure")
-            .accessibilityValue(exposureTitle(draft.exposureBias))
-        }
-    }
-
-    private var styleControl: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Photographic Style", systemImage: "wand.and.stars")
-                .font(.body.weight(.medium))
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(CameraPhotographicStyle.allCases, id: \.rawValue) { style in
-                        styleButton(style)
-                    }
-                }
-                .padding(.vertical, 2)
-            }
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("Photographic styles")
-        }
-    }
-
-    private var resetButton: some View {
-        Button {
-            draft = .defaults
-            onReset()
-        } label: {
-            Text("Reset to Defaults")
-                .frame(maxWidth: .infinity, minHeight: 44)
-        }
-        .buttonStyle(.bordered)
-        .tint(FrameWiseBrand.signalCoral)
-        .accessibilityLabel("Reset camera settings to defaults")
-    }
-
-    private func controlLabel(symbol: String, title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Image(systemName: symbol)
-                .font(.caption.weight(.semibold))
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-            Text(value)
-                .font(.caption.weight(.semibold))
-                .lineLimit(2)
-                .minimumScaleFactor(0.8)
-        }
-        .frame(
-            minWidth: 78,
-            idealWidth: 78,
-            maxWidth: 78,
-            minHeight: 56,
-            alignment: .leading
-        )
-        .padding(.horizontal, 10)
-        .background(FrameWiseBrand.ink.opacity(colorScheme == .dark ? 0.9 : 0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(FrameWiseBrand.signalCoral.opacity(0.22), lineWidth: 1)
-        }
-        .contentShape(Rectangle())
-    }
-
-    @ViewBuilder
-    private func menuChoiceLabel(_ title: String, isSelected: Bool) -> some View {
-        if isSelected {
-            Label(title, systemImage: "checkmark")
-        } else {
-            Text(title)
-        }
     }
 
     private func styleButton(_ style: CameraPhotographicStyle) -> some View {
-        let isSelected = draft.photographicStyle == style
-
+        let selected = settings.photographicStyle == style
         return Button {
-            update { $0.photographicStyle = style }
+            var next = settings
+            next.photographicStyle = style
+            next.styleIntensity = 1
+            onChange(next)
         } label: {
-            VStack(spacing: 6) {
-                Circle()
-                    .fill(styleSwatch(for: style))
-                    .frame(width: 28, height: 28)
-                    .overlay {
-                        Circle()
-                            .stroke(.white.opacity(0.42), lineWidth: 1)
+            VStack(spacing: 10) {
+                StyleArtwork(
+                    style: style,
+                    intensity: selected ? Double(settings.styleIntensity) : 0.82
+                )
+                .frame(width: 76, height: 94)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .overlay(alignment: .topTrailing) {
+                        if selected {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.black, FrameWiseBrand.signalCoral)
+                                .padding(7)
+                        }
                     }
                 Text(style.title)
-                    .font(.caption.weight(isSelected ? .semibold : .regular))
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
+                    .font(.subheadline.weight(selected ? .semibold : .regular))
+                    .foregroundStyle(selected ? FrameWiseBrand.signalCoral : .white)
             }
-                    .frame(
-                        minWidth: 76,
-                        idealWidth: 76,
-                        maxWidth: 76,
-                        minHeight: 68
-                    )
-            .foregroundStyle(FrameWiseBrand.foreground(for: colorScheme))
-            .background(
-                isSelected
-                    ? FrameWiseBrand.signalCoral.opacity(0.2)
-                    : FrameWiseBrand.ink.opacity(colorScheme == .dark ? 0.9 : 0.08)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(
-                        isSelected
-                            ? FrameWiseBrand.signalCoral
-                            : FrameWiseBrand.signalCoral.opacity(0.18),
-                        lineWidth: 1
-                    )
-            }
+            .padding(4)
         }
-        .buttonStyle(.plain)
         .accessibilityLabel("Photographic style \(style.title)")
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityValue(selected ? "Selected, \(Int(settings.styleIntensity * 100)) percent intensity" : "")
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    private var exposureBinding: Binding<Double> {
+    private var intensityBinding: Binding<Float> {
         Binding(
-            get: {
-                min(
-                    max(Double(draft.exposureBias), safeExposureRange.lowerBound),
-                    safeExposureRange.upperBound
-                )
-            },
+            get: { settings.styleIntensity },
             set: { value in
-                update { $0.exposureBias = Float(value) }
+                var next = settings
+                next.styleIntensity = value
+                onChange(next)
             }
         )
     }
+}
 
-    private var safeExposureRange: ClosedRange<Double> {
-        let minimum = Double(exposureRange.minimum)
-        let maximum = Double(exposureRange.maximum)
-        guard minimum.isFinite, maximum.isFinite, minimum < maximum else {
-            return -2...2
+private struct StyleArtwork: View {
+    let style: CameraPhotographicStyle
+    let intensity: Double
+
+    private var adjustments: CameraStyleAdjustments {
+        style.adjustments(at: intensity)
+    }
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: palette,
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            Circle()
+                .fill(.white.opacity(0.22))
+                .frame(width: 132, height: 132)
+                .blur(radius: 2)
+                .offset(x: 38, y: -28)
+
+            RoundedRectangle(cornerRadius: 34, style: .continuous)
+                .stroke(.white.opacity(0.42), lineWidth: 1)
+                .rotationEffect(.degrees(-12))
+                .scaleEffect(x: 1.1, y: 0.7)
+
+            VStack(spacing: 8) {
+                Image(systemName: symbol)
+                    .font(.system(size: 30, weight: .medium))
+                Text(style.title)
+                    .font(.headline.weight(.semibold))
+            }
+            .foregroundStyle(.white)
+            .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
         }
-
-        return minimum...maximum
+        .saturation(adjustments.saturation)
+        .contrast(adjustments.contrast)
+        .brightness(adjustments.brightness)
+        .colorMultiply(Color(
+            red: min(max(adjustments.redMultiplier, 0), 1),
+            green: min(max(adjustments.greenMultiplier, 0), 1),
+            blue: min(max(adjustments.blueMultiplier, 0), 1)
+        ))
     }
 
-    private var zoomChoices: [Float] {
-        let baseChoices: [Float] = [1, 1.5, 2, 3, 4, 5]
-        var choices = baseChoices.filter { safeZoomRange.contains($0) }
-        if !choices.contains(safeZoomRange.lowerBound) {
-            choices.append(safeZoomRange.lowerBound)
+    private var symbol: String {
+        switch style {
+        case .standard: "camera"
+        case .vivid: "sparkles"
+        case .warm: "sun.max.fill"
+        case .cool: "snowflake"
+        case .mono: "circle.lefthalf.filled"
         }
-        if !choices.contains(safeZoomRange.upperBound) {
-            choices.append(safeZoomRange.upperBound)
-        }
-        return choices.sorted()
     }
 
-    private var safeZoomRange: ClosedRange<Float> {
-        guard zoomRange.lowerBound.isFinite,
-              zoomRange.upperBound.isFinite,
-              zoomRange.lowerBound <= zoomRange.upperBound else {
-            return 1...10
-        }
-
-        return zoomRange
-    }
-
-    private func clampedZoom(_ zoom: Float) -> Float {
-        min(max(zoom, safeZoomRange.lowerBound), safeZoomRange.upperBound)
-    }
-
-    private func zoomTitle(_ zoom: Float) -> String {
-        String(format: "%.1fx", Double(zoom))
-    }
-
-    private func exposureTitle(_ exposure: Float) -> String {
-        String(format: "%+.1f EV", Double(exposure))
-    }
-
-    private func styleSwatch(for style: CameraPhotographicStyle) -> Color {
+    private var palette: [Color] {
         switch style {
         case .standard:
-            return .gray
+            [Color(white: 0.18), Color(white: 0.58), Color(white: 0.92)]
         case .vivid:
-            return .orange
+            [Color(red: 0.97, green: 0.18, blue: 0.28), .orange, .yellow]
         case .warm:
-            return .red.opacity(0.78)
+            [Color(red: 0.34, green: 0.08, blue: 0.05), Color(red: 0.86, green: 0.36, blue: 0.12), .yellow]
         case .cool:
-            return .blue.opacity(0.78)
+            [Color(red: 0.03, green: 0.12, blue: 0.28), Color(red: 0.10, green: 0.48, blue: 0.76), .cyan]
         case .mono:
-            return .black
+            [Color(white: 0.04), Color(white: 0.38), Color(white: 0.86)]
         }
-    }
-
-    private func update(_ change: (inout CameraSettings) -> Void) {
-        var next = draft
-        change(&next)
-        draft = next
-        onChange(next)
     }
 }
 #endif

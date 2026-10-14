@@ -6,7 +6,7 @@ import UIKit
 import FrameWiseCore
 
 /// The camera-first screen: preview as the canvas, recovery states as needed,
-/// and one quiet dock with exactly three controls.
+/// with direct top controls and a quiet three-button capture dock.
 struct CameraScreen: View {
     @ObservedObject var viewModel: CameraViewModel
     @ObservedObject var photoStore: CapturedPhotoStore
@@ -18,7 +18,7 @@ struct CameraScreen: View {
     @State private var captureFlight: CapturedPhoto?
     @State private var isProcessingPendingCapture = false
     @State private var isSettingsPresented = false
-    @State private var zoomAtGestureStart: Float?
+    @State private var isPinching = false
 
     var body: some View {
         ZStack {
@@ -43,6 +43,16 @@ struct CameraScreen: View {
             }
         }
         .background(FrameWiseBrand.surface(for: colorScheme).ignoresSafeArea())
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if showsControlDock {
+                CameraTopControls(
+                    settings: viewModel.settings,
+                    flashAvailable: viewModel.flashAvailable,
+                    onChange: { viewModel.updateSettings($0) },
+                    onStyles: { isSettingsPresented = true }
+                )
+            }
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if showsControlDock {
                 controlDock
@@ -65,13 +75,13 @@ struct CameraScreen: View {
         .onDisappear {
             viewModel.stop()
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+            viewModel.persistSettings()
+        }
         .sheet(isPresented: $isSettingsPresented) {
             CameraSettingsSheet(
                 settings: viewModel.settings,
-                exposureRange: viewModel.exposureRange,
-                zoomRange: viewModel.zoomRange,
-                flashAvailable: viewModel.flashAvailable,
-                onChange: viewModel.updateSettings,
+                onChange: { viewModel.updateSettings($0) },
                 onReset: viewModel.resetSettings
             )
         }
@@ -108,34 +118,60 @@ struct CameraScreen: View {
 
     private var preview: some View {
         // [AC-CAMSET1014-F5] [AC-CAMSET1014-F6] [AC-CAMSET1014-F7]
-        ZStack {
-            styledPreview
+        GeometryReader { proxy in
+            let size = viewModel.settings.aspectRatio.previewSize(
+                fittingWidth: proxy.size.width, height: proxy.size.height
+            )
+            ZStack {
+                styledPreview
+                    .contentShape(Rectangle())
+                    .simultaneousGesture(zoomGesture)
 
-            CameraAspectMask(ratio: viewModel.settings.aspectRatio.value)
+                if let focusPoint = viewModel.focusPoint {
+                    FocusExposureOverlay(
+                        isLocked: viewModel.isFocusLocked,
+                        exposure: viewModel.settings.exposureBias,
+                        exposureRange: viewModel.exposureRange,
+                        onExposureChange: viewModel.setExposureBias,
+                        onToggleLock: viewModel.toggleFocusLock
+                    )
+                        .position(focusPoint)
+                        .transition(.scale.combined(with: .opacity))
+                }
 
-            if let focusPoint = viewModel.focusPoint {
-                FocusIndicator()
-                    .position(focusPoint)
-                    .transition(.scale.combined(with: .opacity))
+                if let countdown = viewModel.countdown {
+                    Text("\(countdown)")
+                        .font(.system(size: 72, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.36), radius: 10)
+                        .transition(.scale.combined(with: .opacity))
+                        .allowsHitTesting(false)
+                }
             }
-
-            if let countdown = viewModel.countdown {
-                Text("\(countdown)")
-                    .font(.system(size: 72, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.36), radius: 10)
-                    .transition(.scale.combined(with: .opacity))
+            .frame(width: size.width, height: size.height)
+            .clipped()
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.24),
+                       value: viewModel.settings.aspectRatio)
+            .overlay(alignment: .bottom) {
+                if showsControlDock {
+                    CameraZoomControls(value: viewModel.settings.zoomFactor,
+                                       range: viewModel.zoomRange,
+                                       onChange: { viewModel.setZoomFactor($0, animated: !reduceMotion) })
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 16)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .contentShape(Rectangle())
-        .simultaneousGesture(zoomGesture)
+        .background(.black)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: viewModel.focusPoint)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: viewModel.countdown)
-        .ignoresSafeArea()
     }
 
     private var styledPreview: some View {
-        let adjustments = viewModel.settings.photographicStyle.adjustments
+        let adjustments = viewModel.settings.photographicStyle.adjustments(
+            at: Double(viewModel.settings.styleIntensity)
+        )
         let tint = Color(
             red: min(max(adjustments.redMultiplier, 0), 1),
             green: min(max(adjustments.greenMultiplier, 0), 1),
@@ -144,6 +180,7 @@ struct CameraScreen: View {
 
         return CameraPreview(
             session: viewModel.session,
+            deviceID: viewModel.activeDeviceID,
             onTap: { previewPoint, devicePoint in
                 viewModel.focus(
                     previewPoint: previewPoint,
@@ -160,15 +197,11 @@ struct CameraScreen: View {
     private var zoomGesture: some Gesture {
         MagnificationGesture()
             .onChanged { value in
-                if zoomAtGestureStart == nil {
-                    zoomAtGestureStart = viewModel.settings.zoomFactor
-                }
-
-                let startingZoom = zoomAtGestureStart ?? 1
-                viewModel.setZoomFactor(max(1, startingZoom * Float(value)))
+                viewModel.pinchZoom(magnification: Float(value), isStarting: !isPinching)
+                isPinching = true
             }
             .onEnded { _ in
-                zoomAtGestureStart = nil
+                isPinching = false
             }
     }
 
@@ -190,69 +223,40 @@ struct CameraScreen: View {
         }
     }
 
-    /// A single settings entry point sits above the persistent library,
-    /// shutter, and flip controls.
+    /// Keep capture actions separate from the live preview and settings.
     private var controlDock: some View {
-        VStack(spacing: 6) {
-            settingsEntryButton
+        HStack(alignment: .center, spacing: 0) {
+            libraryLink
 
-            HStack(alignment: .center, spacing: 28) {
-                libraryLink
+            Spacer(minLength: 16)
 
-                Button(action: viewModel.capturePhoto) {
-                    ZStack {
-                        Circle()
-                            .fill(.white)
-                        Circle()
-                            .fill(FrameWiseBrand.signalCoral)
-                            .padding(5)
-                    }
-                    .frame(width: 72, height: 72)
+            Button(action: viewModel.capturePhoto) {
+                ZStack {
+                    Circle().stroke(.white.opacity(0.7), lineWidth: 3)
+                    Circle().fill(.white).padding(6)
                 }
-                .accessibilityLabel("Take photo")
-                .accessibilityHint("Captures a still photo from the camera preview.")
-
-                Button(action: viewModel.flipCamera) {
-                    Image(systemName: "camera.rotate")
-                        .font(.system(size: 19, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
-                        .background(.white.opacity(0.12))
-                        .clipShape(Circle())
-                }
-                .accessibilityLabel("Flip camera")
-                .accessibilityHint("Switches between the rear and front cameras.")
+                .frame(width: 72, height: 72)
             }
-            .frame(maxWidth: .infinity)
+            .accessibilityLabel("Take photo")
+            .accessibilityHint("Captures a still photo from the camera preview.")
+
+            Spacer(minLength: 16)
+
+            Button(action: viewModel.flipCamera) {
+                Image(systemName: "camera.rotate")
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .modifier(CameraGlass())
+            }
+            .accessibilityLabel("Flip camera")
+            .accessibilityHint("Switches between the rear and front cameras.")
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
-        .background(FrameWiseBrand.ink.opacity(0.94))
-        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .stroke(.white.opacity(0.12), lineWidth: 1)
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 12)
-        .padding(.bottom, 10)
-    }
-
-    private var settingsEntryButton: some View {
-        Button {
-            isSettingsPresented = true
-        } label: {
-            Label("Controls", systemImage: "slider.horizontal.3")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .frame(minHeight: 44)
-                .background(.white.opacity(0.12))
-                .clipShape(Capsule())
-        }
-        .accessibilityLabel("Camera controls")
-        .accessibilityHint("Opens flash, timer, exposure, aspect, zoom, and style settings.")
+        .padding(.horizontal, 32)
+        .padding(.vertical, 20)
+        .background(.black)
+        .environment(\.colorScheme, .dark)
     }
 
     private var libraryAccessDock: some View {
@@ -407,63 +411,125 @@ struct CameraScreen: View {
     }
 }
 
-private struct CameraAspectMask: View {
-    let ratio: Double
+private struct FocusExposureOverlay: View {
+    let isLocked: Bool
+    let exposure: Float
+    let exposureRange: CameraExposureRange
+    let onExposureChange: (Float) -> Void
+    let onToggleLock: () -> Void
+
+    var body: some View {
+        ZStack {
+            FocusIndicator(isLocked: isLocked)
+
+            FocusExposureSlider(
+                value: exposure,
+                range: exposureRange,
+                onChange: onExposureChange
+            )
+            .offset(x: 52)
+            .opacity(isLocked ? 0.68 : 1)
+
+            Color.clear
+                .frame(width: 68, height: 68)
+                .contentShape(Rectangle())
+                .gesture(
+                    LongPressGesture(minimumDuration: 0.45)
+                        .onEnded { _ in onToggleLock() }
+                )
+                .accessibilityElement()
+                .accessibilityLabel(isLocked ? "Focus locked" : "Focus point")
+                .accessibilityValue(isLocked ? "Locked" : "Unlocked")
+                .accessibilityHint("Long press to lock or unlock focus.")
+        }
+        .frame(width: 140, height: 128)
+    }
+}
+
+private struct FocusExposureSlider: View {
+    let value: Float
+    let range: CameraExposureRange
+    let onChange: (Float) -> Void
+    @State private var dragStart: Float?
 
     var body: some View {
         GeometryReader { proxy in
-            let frame = framingRect(in: proxy.size)
+            ZStack {
+                Capsule()
+                    .fill(.white.opacity(0.82))
+                    .frame(width: 2, height: proxy.size.height - 20)
 
-            Path { path in
-                path.addRect(CGRect(origin: .zero, size: proxy.size))
-                path.addRect(frame)
+                Circle()
+                    .fill(FrameWiseBrand.signalCoral)
+                    .frame(width: 12, height: 12)
+                    .overlay(Circle().stroke(.white, lineWidth: 1.5))
+                    .position(
+                        x: proxy.size.width / 2,
+                        y: range.verticalPosition(
+                            for: value,
+                            height: max(proxy.size.height - 20, 1)
+                        ) + 10
+                    )
+
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .opacity(0.86)
             }
-            .fill(
-                .black.opacity(0.34),
-                style: FillStyle(eoFill: true)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { gesture in
+                        if dragStart == nil { dragStart = value }
+                        onChange(range.verticalBias(
+                            startingAt: dragStart ?? value,
+                            translation: gesture.translation.height,
+                            height: max(proxy.size.height - 20, 1)
+                        ))
+                    }
+                    .onEnded { _ in dragStart = nil }
             )
-
-            Path { path in
-                path.addRect(frame)
+        }
+        .frame(width: 32, height: 128)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Focus exposure")
+        .accessibilityValue(String(format: "%+.1f EV", value))
+        .accessibilityHint("Swipe up to brighten or down to darken.")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment:
+                onChange(range.bias(startingAt: value, translation: 8))
+            case .decrement:
+                onChange(range.bias(startingAt: value, translation: -8))
+            @unknown default:
+                break
             }
-            .stroke(.white.opacity(0.68), lineWidth: 1)
         }
-        .allowsHitTesting(false)
-    }
-
-    private func framingRect(in size: CGSize) -> CGRect {
-        let safeRatio = ratio.isFinite && ratio > 0 ? ratio : 4.0 / 3.0
-        let availableRatio = size.width / max(size.height, 1)
-
-        if availableRatio > safeRatio {
-            let height = size.height
-            let width = height * safeRatio
-            return CGRect(
-                x: (size.width - width) / 2,
-                y: 0,
-                width: width,
-                height: height
-            )
-        }
-
-        let width = size.width
-        let height = width / safeRatio
-        return CGRect(
-            x: 0,
-            y: (size.height - height) / 2,
-            width: width,
-            height: height
-        )
     }
 }
 
 private struct FocusIndicator: View {
+    let isLocked: Bool
+
     var body: some View {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .stroke(FrameWiseBrand.signalCoral, lineWidth: 2)
-            .frame(width: 68, height: 68)
-            .shadow(color: .black.opacity(0.25), radius: 3)
-            .accessibilityHidden(true)
+        ZStack(alignment: .topTrailing) {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(FrameWiseBrand.signalCoral, lineWidth: 2)
+                .frame(width: 68, height: 68)
+                .shadow(color: .black.opacity(0.25), radius: 3)
+                .opacity(isLocked ? 0.48 : 1)
+
+            if isLocked {
+                Image(systemName: "lock.fill")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(5)
+                    .background(.black.opacity(0.86), in: Circle())
+                    .overlay(Circle().stroke(.white.opacity(0.32), lineWidth: 1))
+                    .offset(x: 7, y: -7)
+            }
+        }
+        .accessibilityHidden(true)
     }
 }
 

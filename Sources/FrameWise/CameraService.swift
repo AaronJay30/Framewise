@@ -24,6 +24,7 @@ protocol CameraServiceDelegate: AnyObject {
         _ cameraService: CameraService,
         didUpdateFlashAvailability isAvailable: Bool
     )
+    func cameraService(_ cameraService: CameraService, didChangeDeviceID deviceID: String)
 }
 
 /// Owns the AVFoundation session and keeps session work off the UI thread.
@@ -40,8 +41,11 @@ final class CameraService: NSObject, @unchecked Sendable, AVCapturePhotoCaptureD
     private let photoOutput = AVCapturePhotoOutput()
     private let captureSettingsLock = NSLock()
     private var videoInput: AVCaptureDeviceInput?
+    private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
     private var currentPosition: AVCaptureDevice.Position = .back
     private var currentSettings = CameraSettings.defaults
+    private var appliedSettings: CameraSettings?
+    private var pinchNativeStart: Float = 1
     private var captureSettingsByID: [Int64: CameraSettings] = [:]
     private var isConfigured = false
 
@@ -69,13 +73,32 @@ final class CameraService: NSObject, @unchecked Sendable, AVCapturePhotoCaptureD
 
     /// Applies the latest user-selected values on the session queue.
     // [AC-CAMSET1014-F4] [AC-CAMSET1014-F7]
-    func apply(settings: CameraSettings) {
+    func apply(settings: CameraSettings, animatedZoom: Bool = false) {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             self.currentSettings = settings.normalized()
 
             guard self.isConfigured else { return }
-            self.applySettingsOnQueue()
+            self.applySettingsOnQueue(animatedZoom: animatedZoom)
+        }
+    }
+
+    /// Starts a pinch from the actual lens position, including during a preset ramp.
+    func pinchZoom(
+        magnification: Float,
+        isStarting: Bool,
+        completion: @escaping @MainActor @Sendable (Float) -> Void
+    ) {
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.videoInput?.device,
+                  self.session.isRunning else { return }
+            if isStarting { self.pinchNativeStart = Float(device.videoZoomFactor) }
+            self.currentSettings.zoomFactor = self.zoomScale(for: device).pinchFactor(
+                nativeStart: self.pinchNativeStart, magnification: magnification
+            )
+            self.applySettingsOnQueue(force: isStarting)
+            let zoom = self.currentSettings.zoomFactor
+            Task { @MainActor in completion(zoom) }
         }
     }
 
@@ -83,7 +106,14 @@ final class CameraService: NSObject, @unchecked Sendable, AVCapturePhotoCaptureD
     // [AC-CAMSET1014-F5] [AC-CAMSET1014-E1]
     func focus(at point: CameraFocusPoint) {
         sessionQueue.async { [weak self] in
-            self?.focusOnQueue(at: point)
+            self?.focusOnQueue(at: point, lockFocus: false)
+        }
+    }
+
+    /// Locks or unlocks focus at the last selected preview point.
+    func setFocusLock(at point: CameraFocusPoint, locked: Bool) {
+        sessionQueue.async { [weak self] in
+            self?.focusOnQueue(at: point, lockFocus: locked)
         }
     }
 
@@ -98,9 +128,15 @@ final class CameraService: NSObject, @unchecked Sendable, AVCapturePhotoCaptureD
 
             let captureSettings = self.clampedSettingsOnQueue(settings)
             self.currentSettings = captureSettings
-            self.applySettingsOnQueue()
+            // A capture must use the requested zoom even if a preset ramp is in flight.
+            self.applySettingsOnQueue(force: true)
 
             let photoSettings = AVCapturePhotoSettings()
+            if let angle = self.rotationCoordinator?.videoRotationAngleForHorizonLevelCapture,
+               let connection = self.photoOutput.connection(with: .video),
+               connection.isVideoRotationAngleSupported(angle) {
+                connection.videoRotationAngle = angle
+            }
             if let flashMode = self.supportedFlashMode(for: captureSettings.flashMode) {
                 photoSettings.flashMode = flashMode
             }
@@ -166,9 +202,12 @@ final class CameraService: NSObject, @unchecked Sendable, AVCapturePhotoCaptureD
         session.commitConfiguration()
 
         videoInput = input
+        appliedSettings = nil
+        updateRotationCoordinator(for: input.device)
         isConfigured = true
         emit(.sessionConfigured)
         applySettingsOnQueue()
+        emitCapabilities(for: input.device)
 
         session.startRunning()
         emit(session.isRunning ? .sessionStarted : .hardwareUnavailable)
@@ -196,20 +235,34 @@ final class CameraService: NSObject, @unchecked Sendable, AVCapturePhotoCaptureD
         session.addInput(newInput)
         session.commitConfiguration()
         videoInput = newInput
+        appliedSettings = nil
+        updateRotationCoordinator(for: newInput.device)
         currentPosition = nextPosition
         applySettingsOnQueue()
+        emitCapabilities(for: newInput.device)
     }
 
     private func makeInput(for position: AVCaptureDevice.Position) -> AVCaptureDeviceInput? {
-        guard let device = AVCaptureDevice.default(
-            .builtInWideAngleCamera,
-            for: .video,
-            position: position
-        ) else {
-            return nil
+        // Virtual rear cameras allow zooming out to the ultrawide constituent.
+        let types: [AVCaptureDevice.DeviceType] = position == .back
+            ? [.builtInTripleCamera, .builtInDualWideCamera, .builtInDualCamera, .builtInWideAngleCamera]
+            : [.builtInWideAngleCamera]
+        for type in types {
+            if let device = AVCaptureDevice.default(type, for: .video, position: position),
+               let input = try? AVCaptureDeviceInput(device: device) {
+                return input
+            }
         }
+        return nil
+    }
 
-        return try? AVCaptureDeviceInput(device: device)
+    private func updateRotationCoordinator(for device: AVCaptureDevice) {
+        rotationCoordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: nil)
+        let deviceID = device.uniqueID
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.delegate?.cameraService(self, didChangeDeviceID: deviceID)
+        }
     }
 
     private func clampedSettingsOnQueue(_ settings: CameraSettings) -> CameraSettings {
@@ -223,7 +276,7 @@ final class CameraService: NSObject, @unchecked Sendable, AVCapturePhotoCaptureD
         )
     }
 
-    private func applySettingsOnQueue() {
+    private func applySettingsOnQueue(animatedZoom: Bool = false, force: Bool = false) {
         guard let device = videoInput?.device else { return }
 
         let exposureRange = exposureRange(for: device)
@@ -232,32 +285,43 @@ final class CameraService: NSObject, @unchecked Sendable, AVCapturePhotoCaptureD
             exposureRange: exposureRange,
             zoomRange: zoomRange
         )
-
-        guard (try? device.lockForConfiguration()) != nil else {
-            emitExposureRange(exposureRange)
-            emitZoomRange(zoomRange)
-            emitFlashAvailability(for: device)
-            return
-        }
+        let changes = currentSettings.hardwareChanges(from: force ? nil : appliedSettings)
+        guard changes.exposure || changes.zoom,
+              (try? device.lockForConfiguration()) != nil else { return }
+        defer { device.unlockForConfiguration() }
 
         let supportsExposureBias = device.isExposureModeSupported(.continuousAutoExposure) ||
             device.isExposureModeSupported(.autoExpose)
-        if supportsExposureBias {
+        if changes.exposure && supportsExposureBias {
             if device.isExposureModeSupported(.continuousAutoExposure) {
-                device.exposureMode = .continuousAutoExposure
+                if device.exposureMode != .continuousAutoExposure {
+                    device.exposureMode = .continuousAutoExposure
+                }
             } else {
-                device.exposureMode = .autoExpose
+                if device.exposureMode != .autoExpose { device.exposureMode = .autoExpose }
             }
             device.setExposureTargetBias(currentSettings.exposureBias)
         }
-        device.videoZoomFactor = CGFloat(currentSettings.zoomFactor)
-        device.unlockForConfiguration()
-        emitExposureRange(exposureRange)
-        emitZoomRange(zoomRange)
+        if changes.zoom {
+            let nativeZoom = CGFloat(zoomScale(for: device).nativeFactor(display: currentSettings.zoomFactor))
+            let target = min(max(nativeZoom, device.minAvailableVideoZoomFactor), device.maxAvailableVideoZoomFactor)
+            device.cancelVideoZoomRamp()
+            if animatedZoom && session.isRunning {
+                device.ramp(toVideoZoomFactor: target, withRate: 8)
+            } else {
+                device.videoZoomFactor = target
+            }
+        }
+        appliedSettings = currentSettings
+    }
+
+    private func emitCapabilities(for device: AVCaptureDevice) {
+        emitExposureRange(exposureRange(for: device))
+        emitZoomRange(zoomRange(for: device))
         emitFlashAvailability(for: device)
     }
 
-    private func focusOnQueue(at point: CameraFocusPoint) {
+    private func focusOnQueue(at point: CameraFocusPoint, lockFocus: Bool) {
         guard let device = videoInput?.device,
               (try? device.lockForConfiguration()) != nil else {
             return
@@ -266,7 +330,9 @@ final class CameraService: NSObject, @unchecked Sendable, AVCapturePhotoCaptureD
         let devicePoint = CGPoint(x: point.x, y: point.y)
         if device.isFocusPointOfInterestSupported {
             device.focusPointOfInterest = devicePoint
-            if device.isFocusModeSupported(.autoFocus) {
+            if lockFocus, device.isFocusModeSupported(.locked) {
+                device.focusMode = .locked
+            } else if device.isFocusModeSupported(.autoFocus) {
                 device.focusMode = .autoFocus
             }
         }
@@ -289,7 +355,22 @@ final class CameraService: NSObject, @unchecked Sendable, AVCapturePhotoCaptureD
     }
 
     private func zoomRange(for device: AVCaptureDevice) -> ClosedRange<Float> {
-        Float(device.minAvailableVideoZoomFactor)...Float(device.maxAvailableVideoZoomFactor)
+        let scale = zoomScale(for: device)
+        let minimum = scale.displayFactor(native: Float(device.minAvailableVideoZoomFactor))
+        let maximum = scale.displayFactor(native: Float(device.maxAvailableVideoZoomFactor))
+        return minimum...maximum
+    }
+
+    private func zoomScale(for device: AVCaptureDevice) -> CameraZoomScale {
+        if #available(iOS 18.0, *) {
+            return CameraZoomScale(displayMultiplier: Float(device.displayVideoZoomFactorMultiplier))
+        }
+        // On iOS 17, the first switch-over on an ultrawide virtual device is 1x wide.
+        if device.constituentDevices.contains(where: { $0.deviceType == .builtInUltraWideCamera }),
+           let wideFactor = device.virtualDeviceSwitchOverVideoZoomFactors.first {
+            return CameraZoomScale(displayMultiplier: 1 / wideFactor.floatValue)
+        }
+        return CameraZoomScale(displayMultiplier: 1)
     }
 
     private func supportedFlashMode(

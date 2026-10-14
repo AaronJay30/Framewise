@@ -44,7 +44,9 @@ enum CameraPhotoProcessor {
             )
         }
 
-        let adjustments = settings.photographicStyle.adjustments
+        let adjustments = settings.photographicStyle.adjustments(
+            at: Double(settings.styleIntensity)
+        )
         let cropped = input.cropped(to: boundedCrop)
 
         let colorControls = CIFilter.colorControls()

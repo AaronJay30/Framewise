@@ -14,17 +14,22 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
     @Published private(set) var pendingCapturedPhotos: [CapturedPhoto] = []
     @Published private(set) var settings: CameraSettings
     @Published private(set) var exposureRange: CameraExposureRange = .defaults
-    @Published private(set) var zoomRange: ClosedRange<Float> = 1...10
+    @Published private(set) var zoomRange: ClosedRange<Float> = 1...1
     @Published private(set) var flashAvailable = true
     @Published private(set) var focusPoint: CGPoint?
+    @Published private(set) var isFocusLocked = false
     @Published private(set) var countdown: Int?
+    @Published private(set) var activeDeviceID: String?
 
     let session: AVCaptureSession
 
     private let service: CameraService
     private var pendingCaptureTask: Task<Void, Never>?
     private var focusIndicatorTask: Task<Void, Never>?
+    private var focusedDevicePoint: CameraFocusPoint?
     private var photoProcessingTask: Task<Void, Never>?
+    private var settingsPersistence: AnyCancellable?
+    private var zoomUpdateID = UUID()
 
     private static let settingsKey = "com.framewise.camera.settings"
 
@@ -37,6 +42,10 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
         self.settings = loadedSettings
         service.delegate = self
         service.apply(settings: loadedSettings)
+        settingsPersistence = $settings
+            .removeDuplicates()
+            .debounce(for: .milliseconds(250), scheduler: RunLoop.main)
+            .sink { [weak self] settings in self?.saveSettings(settings) }
     }
 
     deinit {
@@ -52,10 +61,14 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
 
     /// Stops the running session while keeping its configuration available for reuse.
     func stop() {
+        zoomUpdateID = UUID()
+        persistSettings()
         cancelPendingCapture()
         focusIndicatorTask?.cancel()
         focusIndicatorTask = nil
         focusPoint = nil
+        focusedDevicePoint = nil
+        isFocusLocked = false
         service.stop()
     }
 
@@ -67,6 +80,12 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
 
     /// Requests the opposite camera while keeping the service boundary intact.
     func flipCamera() {
+        zoomUpdateID = UUID()
+        focusIndicatorTask?.cancel()
+        focusIndicatorTask = nil
+        focusPoint = nil
+        focusedDevicePoint = nil
+        isFocusLocked = false
         service.flipCamera()
     }
 
@@ -114,12 +133,18 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
         }
     }
 
-    /// Saves a normalized settings value and applies it to the active device.
-    func updateSettings(_ settings: CameraSettings) {
+    /// Publishes immediately; persistence is debounced and sensor writes are selective.
+    func updateSettings(_ settings: CameraSettings, animatedZoom: Bool = false) {
         let normalized = settings.normalized()
+        guard normalized != self.settings else { return }
+        zoomUpdateID = UUID()
+        if normalized.aspectRatio != self.settings.aspectRatio { focusPoint = nil }
         self.settings = normalized
-        saveSettings(normalized)
-        service.apply(settings: normalized)
+        service.apply(settings: normalized, animatedZoom: animatedZoom)
+    }
+
+    func persistSettings() {
+        saveSettings(settings)
     }
 
     /// Restores the safe defaults and applies them to the active device.
@@ -130,29 +155,50 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
     /// Focuses the device at the preview tap and keeps the local marker visible.
     func focus(previewPoint: CGPoint, devicePoint: CameraFocusPoint) {
         focusPoint = previewPoint
-        focusIndicatorTask?.cancel()
-        focusIndicatorTask = Task { @MainActor [weak self] in
-            do {
-                try await Task.sleep(for: .seconds(1.2))
-            } catch {
-                return
-            }
-
-            guard let self, !Task.isCancelled else { return }
-            self.focusPoint = nil
-            self.focusIndicatorTask = nil
-        }
+        focusedDevicePoint = devicePoint
+        isFocusLocked = false
+        scheduleFocusIndicatorHide()
         service.focus(at: devicePoint)
     }
 
+    func toggleFocusLock() {
+        guard let focusedDevicePoint else { return }
+        isFocusLocked.toggle()
+        focusIndicatorTask?.cancel()
+        focusIndicatorTask = nil
+        if !isFocusLocked {
+            scheduleFocusIndicatorHide()
+        }
+        service.setFocusLock(at: focusedDevicePoint, locked: isFocusLocked)
+    }
+
     /// Updates zoom within the active device's published range.
-    func setZoomFactor(_ zoomFactor: Float) {
+    func setZoomFactor(_ zoomFactor: Float, animated: Bool = false) {
         var updated = settings
         updated.zoomFactor = min(
             max(zoomFactor, zoomRange.lowerBound),
             zoomRange.upperBound
         )
+        updateSettings(updated, animatedZoom: animated)
+    }
+
+    func setExposureBias(_ exposureBias: Float) {
+        var updated = settings
+        updated.exposureBias = min(
+            max(exposureBias, exposureRange.minimum),
+            exposureRange.maximum
+        )
         updateSettings(updated)
+        refreshFocusIndicatorTimeout()
+    }
+
+    func pinchZoom(magnification: Float, isStarting: Bool) {
+        let updateID = UUID()
+        zoomUpdateID = updateID
+        service.pinchZoom(magnification: magnification, isStarting: isStarting) { [weak self] zoom in
+            guard let self, self.zoomUpdateID == updateID else { return }
+            if self.settings.zoomFactor != zoom { self.settings.zoomFactor = zoom }
+        }
     }
 
     /// Cancels a pending timer without affecting an already completed capture.
@@ -167,6 +213,36 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
     }
 
     // MARK: - CameraServiceDelegate
+
+    private func scheduleFocusIndicatorHide() {
+        focusIndicatorTask?.cancel()
+        focusIndicatorTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(10))
+            } catch {
+                return
+            }
+
+            guard let self, !Task.isCancelled, !self.isFocusLocked else { return }
+            self.focusPoint = nil
+            self.focusedDevicePoint = nil
+            self.focusIndicatorTask = nil
+        }
+    }
+
+    private func refreshFocusIndicatorTimeout() {
+        guard focusPoint != nil, !isFocusLocked else { return }
+        scheduleFocusIndicatorHide()
+    }
+
+    func cameraService(_ cameraService: CameraService, didChangeDeviceID deviceID: String) {
+        focusIndicatorTask?.cancel()
+        focusIndicatorTask = nil
+        activeDeviceID = deviceID
+        focusPoint = nil
+        focusedDevicePoint = nil
+        isFocusLocked = false
+    }
 
     func cameraService(_ cameraService: CameraService, didEmit event: CameraEvent) {
         state = CameraStateReducer.reduce(state, event: event)
@@ -214,16 +290,16 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
         _ cameraService: CameraService,
         didUpdateExposureRange range: CameraExposureRange
     ) {
-        exposureRange = range
+        let visibleRange = range.userVisibleRange
+        if exposureRange != visibleRange { exposureRange = visibleRange }
 
         var adjusted = settings
         adjusted.exposureBias = min(
-            max(settings.exposureBias, range.minimum),
-            range.maximum
+            max(settings.exposureBias, visibleRange.minimum),
+            visibleRange.maximum
         )
         if adjusted.exposureBias != settings.exposureBias {
-            settings = adjusted
-            saveSettings(adjusted)
+            updateSettings(adjusted)
         }
     }
 
@@ -231,7 +307,7 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
         _ cameraService: CameraService,
         didUpdateZoomRange range: ClosedRange<Float>
     ) {
-        zoomRange = range
+        if zoomRange != range { zoomRange = range }
 
         var adjusted = settings
         adjusted.zoomFactor = min(
@@ -240,7 +316,6 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
         )
         if adjusted.zoomFactor != settings.zoomFactor {
             settings = adjusted
-            saveSettings(adjusted)
         }
     }
 
@@ -248,7 +323,7 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
         _ cameraService: CameraService,
         didUpdateFlashAvailability isAvailable: Bool
     ) {
-        flashAvailable = isAvailable
+        if flashAvailable != isAvailable { flashAvailable = isAvailable }
     }
 
     private func clearPendingCapture() {

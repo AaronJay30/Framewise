@@ -35,9 +35,9 @@ final class CameraSettingsTests: XCTestCase {
             CameraAspectRatio.allCases,
             [.fourByThree, .square, .sixteenByNine]
         )
-        XCTAssertEqual(CameraAspectRatio.fourByThree.value, 4.0 / 3.0)
+        XCTAssertEqual(CameraAspectRatio.fourByThree.value, 3.0 / 4.0)
         XCTAssertEqual(CameraAspectRatio.square.value, 1.0)
-        XCTAssertEqual(CameraAspectRatio.sixteenByNine.value, 16.0 / 9.0)
+        XCTAssertEqual(CameraAspectRatio.sixteenByNine.value, 9.0 / 16.0)
     }
 
     // [AC-CAMSET1014-F8]
@@ -54,7 +54,7 @@ final class CameraSettingsTests: XCTestCase {
     }
 
     func testDefaultsUseSafeCameraValues() {
-        XCTAssertEqual(CameraSettings.defaults.flashMode, .auto)
+        XCTAssertEqual(CameraSettings.defaults.flashMode, .off)
         XCTAssertEqual(CameraSettings.defaults.timerDuration, .off)
         XCTAssertEqual(CameraSettings.defaults.exposureBias, 0)
         XCTAssertEqual(CameraSettings.defaults.aspectRatio, .fourByThree)
@@ -71,6 +71,33 @@ final class CameraSettingsTests: XCTestCase {
         )
 
         XCTAssertEqual(clamped.exposureBias, 2)
+    }
+
+    func testUserExposureRangeCapsWideHardwareRange() {
+        let hardware = CameraExposureRange(minimum: -8, maximum: 8)
+
+        XCTAssertEqual(hardware.userVisibleRange, CameraExposureRange(minimum: -2, maximum: 2))
+    }
+
+    func testVerticalExposureDragMovesUpPositiveAndDownNegative() {
+        let range = CameraExposureRange(minimum: -2, maximum: 2)
+
+        XCTAssertEqual(
+            range.verticalBias(startingAt: 0, translation: -40, height: 160),
+            0.25,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            range.verticalBias(startingAt: 0, translation: 40, height: 160),
+            -0.25,
+            accuracy: 0.001
+        )
+        XCTAssertLessThan(
+            abs(range.verticalBias(startingAt: 0, translation: 128, height: 128)),
+            1
+        )
+        XCTAssertEqual(range.verticalPosition(for: 1, height: 160), 40, accuracy: 0.001)
+        XCTAssertEqual(range.verticalPosition(for: -1, height: 160), 120, accuracy: 0.001)
     }
 
     // [AC-CAMSET1014-F7]
@@ -104,16 +131,41 @@ final class CameraSettingsTests: XCTestCase {
         XCTAssertEqual(crop.height, 1, accuracy: 0.000001)
     }
 
-    func testAspectCropTrimsHeightForTallerSource() {
+    func testPortraitSixteenNineCropsSidesOfPortraitSensor() {
         let crop = CameraAspectRatio.sixteenByNine.cropRect(
             forWidth: 3000,
             height: 4000
         )
 
-        XCTAssertEqual(crop.x, 0, accuracy: 0.000001)
-        XCTAssertEqual(crop.y, 0.2890625, accuracy: 0.000001)
-        XCTAssertEqual(crop.width, 1, accuracy: 0.000001)
-        XCTAssertEqual(crop.height, 0.421875, accuracy: 0.000001)
+        XCTAssertEqual(crop.x, 0.125, accuracy: 0.000001)
+        XCTAssertEqual(crop.y, 0, accuracy: 0.000001)
+        XCTAssertEqual(crop.width, 0.75, accuracy: 0.000001)
+        XCTAssertEqual(crop.height, 1, accuracy: 0.000001)
+    }
+
+    func testPortraitFourThreeKeepsWholePortraitSensor() {
+        XCTAssertEqual(
+            CameraAspectRatio.fourByThree.cropRect(forWidth: 3000, height: 4000),
+            CameraCropRect(x: 0, y: 0, width: 1, height: 1)
+        )
+    }
+
+    func testSquareCropsTopAndBottomOfPortraitSensor() {
+        XCTAssertEqual(
+            CameraAspectRatio.square.cropRect(forWidth: 3000, height: 4000),
+            CameraCropRect(x: 0, y: 0.125, width: 1, height: 0.75)
+        )
+    }
+
+    func testUltrawideSurvivesNormalizationAndHardwareClamping() {
+        XCTAssertEqual(CameraSettings(zoomFactor: 0.5).normalized().zoomFactor, 0.5)
+        XCTAssertEqual(CameraSettings(zoomFactor: 0.5).clamped(
+            exposureRange: .defaults, zoomRange: 0.5...10
+        ).zoomFactor, 0.5)
+        XCTAssertEqual(CameraSettings(zoomFactor: 0.5).clamped(
+            exposureRange: .defaults, zoomRange: 1...5
+        ).zoomFactor, 1)
+        XCTAssertEqual(CameraSettings(zoomFactor: -1).normalized().zoomFactor, 1)
     }
 
     // [AC-CAMSET1014-E1]
@@ -186,6 +238,30 @@ final class CameraSettingsTests: XCTestCase {
         )
     }
 
+    func testStyleIntensityBlendsFromStandardToSelectedLook() {
+        let standard = CameraPhotographicStyle.standard.adjustments
+        let warm = CameraPhotographicStyle.warm.adjustments
+
+        XCTAssertEqual(CameraPhotographicStyle.warm.adjustments(at: 0), standard)
+        XCTAssertEqual(CameraPhotographicStyle.warm.adjustments(at: 1), warm)
+        XCTAssertEqual(
+            CameraPhotographicStyle.warm.adjustments(at: 0.5).brightness,
+            0.01,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            CameraPhotographicStyle.warm.adjustments(at: 3).blueMultiplier,
+            warm.blueMultiplier,
+            accuracy: 0.0001
+        )
+    }
+
+    func testStyleIntensityNormalizesToSafeBounds() {
+        XCTAssertEqual(CameraSettings(styleIntensity: .nan).normalized().styleIntensity, 1)
+        XCTAssertEqual(CameraSettings(styleIntensity: -1).normalized().styleIntensity, 0)
+        XCTAssertEqual(CameraSettings(styleIntensity: 2).normalized().styleIntensity, 1)
+    }
+
     func testSettingsRoundTripThroughCodable() throws {
         let settings = CameraSettings(
             flashMode: .on,
@@ -193,13 +269,22 @@ final class CameraSettingsTests: XCTestCase {
             exposureBias: -1.25,
             aspectRatio: .sixteenByNine,
             zoomFactor: 2.5,
-            photographicStyle: .warm
+            photographicStyle: .warm,
+            styleIntensity: 0.65
         )
 
         let data = try JSONEncoder().encode(settings)
         let decoded = try JSONDecoder().decode(CameraSettings.self, from: data)
 
         XCTAssertEqual(decoded, settings)
+    }
+
+    func testOlderSettingsDecodeWithDefaultStyleIntensity() throws {
+        let data = #"{"flashMode":"off","timerDuration":0,"exposureBias":0,"aspectRatio":"fourByThree","zoomFactor":1,"photographicStyle":"standard"}"#.data(using: .utf8)!
+
+        let decoded = try JSONDecoder().decode(CameraSettings.self, from: data)
+
+        XCTAssertEqual(decoded.styleIntensity, 1)
     }
 
     func testCaptureSettingsSnapshotDoesNotChangeWhenCurrentSettingsChange() {

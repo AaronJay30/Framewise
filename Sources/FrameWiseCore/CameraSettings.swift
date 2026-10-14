@@ -5,6 +5,14 @@ public enum CameraFlashMode: String, CaseIterable, Codable, Sendable {
     case on
     case off
 
+    public var next: Self {
+        switch self {
+        case .off: .auto
+        case .auto: .on
+        case .on: .off
+        }
+    }
+
     public var title: String {
         switch self {
         case .auto:
@@ -22,6 +30,15 @@ public enum CameraTimerDuration: Int, CaseIterable, Codable, Sendable {
     case threeSeconds = 3
     case fiveSeconds = 5
     case tenSeconds = 10
+
+    public var next: Self {
+        switch self {
+        case .off: .threeSeconds
+        case .threeSeconds: .fiveSeconds
+        case .fiveSeconds: .tenSeconds
+        case .tenSeconds: .off
+        }
+    }
 
     public var seconds: TimeInterval {
         TimeInterval(rawValue)
@@ -51,14 +68,23 @@ public enum CameraAspectRatio: String, CaseIterable, Codable, Sendable {
     case square
     case sixteenByNine
 
+    public var next: Self {
+        switch self {
+        case .fourByThree: .square
+        case .square: .sixteenByNine
+        case .sixteenByNine: .fourByThree
+        }
+    }
+
+    /// Width divided by height. Rectangular capture frames are portrait.
     public var value: Double {
         switch self {
         case .fourByThree:
-            return 4.0 / 3.0
+            return 3.0 / 4.0
         case .square:
             return 1
         case .sixteenByNine:
-            return 16.0 / 9.0
+            return 9.0 / 16.0
         }
     }
 
@@ -71,6 +97,12 @@ public enum CameraAspectRatio: String, CaseIterable, Codable, Sendable {
         case .sixteenByNine:
             return "16:9"
         }
+    }
+
+    public func previewSize(fittingWidth width: Double, height: Double) -> (width: Double, height: Double) {
+        guard width.isFinite, height.isFinite, width > 0, height > 0 else { return (0, 0) }
+        let fittedWidth = min(width, height * value)
+        return (fittedWidth, fittedWidth / value)
     }
 
     public func cropRect(forWidth width: Double, height: Double) -> CameraCropRect {
@@ -113,6 +145,55 @@ public struct CameraExposureRange: Equatable, Codable, Sendable {
     }
 
     public static let defaults = CameraExposureRange(minimum: Float(-2), maximum: Float(2))
+
+    /// Keeps the user-facing control compact even when hardware exposes a wider range.
+    public var userVisibleRange: CameraExposureRange {
+        let hardware = safeBounds
+        let preferred = Self.defaults.safeBounds
+        let minimum = max(hardware.minimum, preferred.minimum)
+        let maximum = min(hardware.maximum, preferred.maximum)
+        guard minimum <= maximum else { return Self.defaults }
+        return CameraExposureRange(minimum: minimum, maximum: maximum)
+    }
+
+    /// One EV per 80 points, without quantizing continuous drags.
+    public func bias(startingAt start: Float, translation: Double) -> Float {
+        let origin = start.isFinite ? start : 0
+        let delta = translation.isFinite ? Float(translation / 80) : 0
+        let bounds = safeBounds
+        return min(max(origin + delta, bounds.minimum), bounds.maximum)
+    }
+
+    /// Fixed scale: negative values on the left, positive values on the right.
+    public func rulerBias(startingAt start: Float, translation: Double, width: Double) -> Float {
+        guard width.isFinite, width > 0 else { return bias(startingAt: start, translation: 0) }
+        let bounds = safeBounds
+        let equivalentTranslation = translation / width * Double(bounds.maximum - bounds.minimum) * 80
+        return bias(startingAt: start, translation: equivalentTranslation)
+    }
+
+    /// Maps vertical dragging to exposure: up increases EV, down decreases EV.
+    public func verticalBias(startingAt start: Float, translation: Double, height: Double) -> Float {
+        let safeHeight = height.isFinite && height > 0 ? height : 160
+        let pointsPerEV = max(safeHeight, 160)
+        let scaledTranslation = translation.isFinite
+            ? translation * 80 / pointsPerEV
+            : 0
+        return bias(startingAt: start, translation: -scaledTranslation)
+    }
+
+    public func rulerPosition(for bias: Float, width: Double) -> Double {
+        guard width.isFinite, width > 0 else { return 0 }
+        let bounds = safeBounds
+        guard bounds.maximum > bounds.minimum else { return width / 2 }
+        let value = min(max(bias.isFinite ? bias : 0, bounds.minimum), bounds.maximum)
+        return Double((value - bounds.minimum) / (bounds.maximum - bounds.minimum)) * width
+    }
+
+    public func verticalPosition(for bias: Float, height: Double) -> Double {
+        guard height.isFinite, height > 0 else { return 0 }
+        return height - rulerPosition(for: bias, width: height)
+    }
 
     var safeBounds: (minimum: Float, maximum: Float) {
         guard minimum.isFinite, maximum.isFinite, minimum <= maximum else {
@@ -159,6 +240,22 @@ public struct CameraStyleAdjustments: Equatable, Codable, Sendable {
         self.redMultiplier = redMultiplier
         self.greenMultiplier = greenMultiplier
         self.blueMultiplier = blueMultiplier
+    }
+
+    public func blended(with target: CameraStyleAdjustments, amount: Double) -> CameraStyleAdjustments {
+        let value = min(max(amount.isFinite ? amount : 0, 0), 1)
+        func mix(_ start: Double, _ end: Double) -> Double {
+            start + (end - start) * value
+        }
+
+        return CameraStyleAdjustments(
+            saturation: mix(saturation, target.saturation),
+            contrast: mix(contrast, target.contrast),
+            brightness: mix(brightness, target.brightness),
+            redMultiplier: mix(redMultiplier, target.redMultiplier),
+            greenMultiplier: mix(greenMultiplier, target.greenMultiplier),
+            blueMultiplier: mix(blueMultiplier, target.blueMultiplier)
+        )
     }
 }
 
@@ -233,6 +330,13 @@ public enum CameraPhotographicStyle: String, CaseIterable, Codable, Sendable {
             )
         }
     }
+
+    public func adjustments(at intensity: Double) -> CameraStyleAdjustments {
+        CameraPhotographicStyle.standard.adjustments.blended(
+            with: adjustments,
+            amount: intensity
+        )
+    }
 }
 
 public struct CameraSettings: Equatable, Codable, Sendable {
@@ -242,14 +346,16 @@ public struct CameraSettings: Equatable, Codable, Sendable {
     public var aspectRatio: CameraAspectRatio
     public var zoomFactor: Float
     public var photographicStyle: CameraPhotographicStyle
+    public var styleIntensity: Float
 
     public init(
-        flashMode: CameraFlashMode = .auto,
+        flashMode: CameraFlashMode = .off,
         timerDuration: CameraTimerDuration = .off,
         exposureBias: Float = 0,
         aspectRatio: CameraAspectRatio = .fourByThree,
         zoomFactor: Float = 1,
-        photographicStyle: CameraPhotographicStyle = .standard
+        photographicStyle: CameraPhotographicStyle = .standard,
+        styleIntensity: Float = 1
     ) {
         self.flashMode = flashMode
         self.timerDuration = timerDuration
@@ -257,14 +363,55 @@ public struct CameraSettings: Equatable, Codable, Sendable {
         self.aspectRatio = aspectRatio
         self.zoomFactor = zoomFactor
         self.photographicStyle = photographicStyle
+        self.styleIntensity = styleIntensity
     }
 
     public static let defaults = CameraSettings()
 
+    private enum CodingKeys: String, CodingKey {
+        case flashMode
+        case timerDuration
+        case exposureBias
+        case aspectRatio
+        case zoomFactor
+        case photographicStyle
+        case styleIntensity
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.flashMode = try values.decode(CameraFlashMode.self, forKey: .flashMode)
+        self.timerDuration = try values.decode(CameraTimerDuration.self, forKey: .timerDuration)
+        self.exposureBias = try values.decode(Float.self, forKey: .exposureBias)
+        self.aspectRatio = try values.decode(CameraAspectRatio.self, forKey: .aspectRatio)
+        self.zoomFactor = try values.decode(Float.self, forKey: .zoomFactor)
+        self.photographicStyle = try values.decode(CameraPhotographicStyle.self, forKey: .photographicStyle)
+        self.styleIntensity = try values.decodeIfPresent(Float.self, forKey: .styleIntensity) ?? 1
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(flashMode, forKey: .flashMode)
+        try values.encode(timerDuration, forKey: .timerDuration)
+        try values.encode(exposureBias, forKey: .exposureBias)
+        try values.encode(aspectRatio, forKey: .aspectRatio)
+        try values.encode(zoomFactor, forKey: .zoomFactor)
+        try values.encode(photographicStyle, forKey: .photographicStyle)
+        try values.encode(styleIntensity, forKey: .styleIntensity)
+    }
+
+    /// Flash is set per capture; aspect, timer, and style don't reconfigure the sensor.
+    public func hardwareChanges(from previous: CameraSettings?) -> (exposure: Bool, zoom: Bool) {
+        (previous?.exposureBias != exposureBias, previous?.zoomFactor != zoomFactor)
+    }
+
     public func normalized() -> CameraSettings {
         var normalized = self
         normalized.exposureBias = exposureBias.isFinite ? exposureBias : 0
-        normalized.zoomFactor = zoomFactor.isFinite ? max(1, zoomFactor) : 1
+        normalized.zoomFactor = zoomFactor.isFinite && zoomFactor > 0 ? zoomFactor : 1
+        normalized.styleIntensity = styleIntensity.isFinite
+            ? min(max(styleIntensity, 0), 1)
+            : 1
         return normalized
     }
 
