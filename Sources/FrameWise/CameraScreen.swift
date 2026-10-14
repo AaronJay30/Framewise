@@ -9,19 +9,37 @@ import FrameWiseCore
 /// and one quiet dock with exactly three controls.
 struct CameraScreen: View {
     @ObservedObject var viewModel: CameraViewModel
+    @ObservedObject var photoStore: CapturedPhotoStore
 
     @Environment(\.openURL) private var openURL
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var captureAnimationNamespace
+    @State private var captureFlight: CapturedPhoto?
+    @State private var storedCaptureIDs = Set<UUID>()
 
     var body: some View {
         ZStack {
             cameraContent
+
+            if let captureFlight,
+               let image = UIImage(data: captureFlight.data) {
+                CaptureFlightView(
+                    photo: captureFlight,
+                    image: image,
+                    namespace: captureAnimationNamespace,
+                    onFinished: finishCaptureFlight
+                )
+            }
         }
         .background(FrameWiseBrand.surface(for: colorScheme).ignoresSafeArea())
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if showsControlDock {
                 controlDock
             }
+        }
+        .onChange(of: viewModel.lastCapturedPhoto?.id) { _, _ in
+            storeLatestCapture()
         }
     }
 
@@ -72,12 +90,7 @@ struct CameraScreen: View {
     private var controlDock: some View {
         HStack(alignment: .center, spacing: 28) {
             Button(action: {}) {
-                Image(systemName: viewModel.lastCapturedPhoto == nil ? "photo" : "photo.fill")
-                    .font(.system(size: 19, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
-                    .background(.white.opacity(0.12))
-                    .clipShape(Circle())
+                libraryThumbnail
             }
             .accessibilityLabel("Library")
             .accessibilityHint("Your latest captured photo will appear here.")
@@ -120,6 +133,60 @@ struct CameraScreen: View {
         .padding(.bottom, 10)
     }
 
+    @ViewBuilder
+    private var libraryThumbnail: some View {
+        if let photo = photoStore.latestPhoto,
+           let image = UIImage(data: photo.data) {
+            if reduceMotion {
+                thumbnailImage(image)
+                    .opacity(captureFlight?.id == photo.id ? 0 : 1)
+            } else {
+                thumbnailImage(image)
+                    .matchedGeometryEffect(
+                        id: photo.id,
+                        in: captureAnimationNamespace,
+                        isSource: captureFlight?.id != photo.id
+                    )
+                    .opacity(captureFlight?.id == photo.id ? 0 : 1)
+            }
+        } else {
+            Image(systemName: "photo")
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(.white.opacity(0.12))
+                .clipShape(Circle())
+        }
+    }
+
+    private func thumbnailImage(_ image: UIImage) -> some View {
+        Image(uiImage: image)
+            .resizable()
+            .scaledToFill()
+            .frame(width: 44, height: 44)
+            .clipShape(Circle())
+    }
+
+    private func storeLatestCapture() {
+        guard let photo = viewModel.lastCapturedPhoto,
+              storedCaptureIDs.insert(photo.id).inserted else {
+            return
+        }
+
+        Task { @MainActor in
+            guard await photoStore.add(photo) else {
+                storedCaptureIDs.remove(photo.id)
+                return
+            }
+
+            captureFlight = photo
+        }
+    }
+
+    private func finishCaptureFlight() {
+        captureFlight = nil
+    }
+
     private var captureFailureCard: some View {
         VStack(spacing: 10) {
             Text("Photo not captured")
@@ -148,6 +215,54 @@ struct CameraScreen: View {
     private func openCameraSettings() {
         guard let settingsURL = URL(string: UIApplication.openSettingsURLString) else { return }
         openURL(settingsURL)
+    }
+}
+
+private struct CaptureFlightView: View {
+    let photo: CapturedPhoto
+    let image: UIImage
+    let namespace: Namespace.ID
+    let onFinished: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    @ViewBuilder
+    var body: some View {
+        if reduceMotion {
+            flightImage
+                .transition(.opacity)
+        } else {
+            flightImage
+                .matchedGeometryEffect(id: photo.id, in: namespace)
+        }
+    }
+
+    private var flightImage: some View {
+        Image(uiImage: image)
+            .resizable()
+            .scaledToFill()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+            .background(.black)
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            .task(id: photo.id) {
+                do {
+                    try await Task.sleep(
+                        for: .seconds(reduceMotion ? 0.18 : 0.55)
+                    )
+                } catch {
+                    return
+                }
+
+                withAnimation(
+                    reduceMotion
+                        ? .easeOut(duration: 0.18)
+                        : .easeInOut(duration: 0.55)
+                ) {
+                    onFinished()
+                }
+            }
     }
 }
 

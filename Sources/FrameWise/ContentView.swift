@@ -10,18 +10,21 @@ import SwiftUI
 /// service, not in this view.
 struct ContentView: View {
     @StateObject private var viewModel = CameraViewModel()
+    @StateObject private var photoStore = CapturedPhotoStore()
     @State private var minimumIntroDurationElapsed = false
 
     var body: some View {
-        ZStack {
-            CameraScreen(viewModel: viewModel)
+        NavigationStack {
+            ZStack {
+                CameraScreen(viewModel: viewModel, photoStore: photoStore)
 
-            BrandIntroView(
-                isActive: FrameWiseBrandToken.shouldShowBrandIntro(
-                    for: viewModel.state,
-                    minimumDurationElapsed: minimumIntroDurationElapsed
+                BrandIntroView(
+                    isActive: FrameWiseBrandToken.shouldShowBrandIntro(
+                        for: viewModel.state,
+                        minimumDurationElapsed: minimumIntroDurationElapsed
+                    )
                 )
-            )
+            }
         }
         .task {
             viewModel.start()
