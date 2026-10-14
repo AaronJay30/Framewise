@@ -579,7 +579,7 @@ private struct CaptureFlightView: View {
 
             do {
                 try await Task.sleep(
-                    for: .seconds(reduceMotion ? 0.12 : 0.06)
+                    for: .seconds(reduceMotion ? 0.14 : 0.18)
                 )
             } catch {
                 return
@@ -588,7 +588,7 @@ private struct CaptureFlightView: View {
             withAnimation(
                 reduceMotion
                     ? .easeOut(duration: 0.18)
-                    : .easeOut(duration: 0.32)
+                    : .easeInOut(duration: 0.62)
             ) {
                 onFinished()
             }

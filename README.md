@@ -62,6 +62,7 @@ FrameWise/
 │   │   ├── CameraPreview.swift
 │   │   ├── CameraScreen.swift
 │   │   ├── LibraryView.swift
+│   │   ├── PhotoGalleryView.swift
 │   │   ├── PhotoPreviewView.swift
 │   │   ├── PhotoLibraryWriter.swift
 │   │   └── ShareSheet.swift
@@ -72,6 +73,7 @@ FrameWise/
 │       ├── CameraPhotoProcessingPolicy.swift
 │       ├── BrandingTokens.swift
 │       ├── CapturedPhoto.swift
+│       ├── CapturedPhotoGrouping.swift
 │       ├── CapturedPhotoLibrary.swift
 │       └── CapturedPhotoDiskStore.swift
 ├── Tests/FrameWiseCoreTests/
@@ -79,6 +81,7 @@ FrameWise/
 │   ├── BrandingTokenTests.swift
 │   ├── CameraSettingsTests.swift
 │   ├── CameraPhotoProcessingPolicyTests.swift
+│   ├── CapturedPhotoGroupingTests.swift
 │   ├── CapturedPhotoLibraryTests.swift
 │   └── CapturedPhotoDiskStoreTests.swift
 ├── Resources/
@@ -145,13 +148,14 @@ Camera frame rate and gesture responsiveness have not been measured on-device.
 ## Captured photo flow
 
 - Capture stays on Camera. After the private app-storage write succeeds, the
-  live preview remains visible while a contained capture card briefly shrinks
-  into the dock's Library thumbnail. Reduced Motion uses an opacity-only
-  completion transition. Rapid captures are queued until each private write
-  succeeds, and a failed write exposes a retry path.
-- Library lists stored captures newest first and restores them after relaunch.
-  Its lower-right Camera button returns to the existing camera root; it does
-  not create a second camera session.
+  live preview remains visible while a contained capture card holds briefly,
+  then smoothly shrinks into the dock's Library thumbnail. Reduced Motion uses
+  an opacity-only completion transition. Rapid captures are queued until each
+  private write succeeds, and a failed write exposes a retry path.
+- Library restores stored captures after relaunch and offers By Day groups plus
+  an All Photos mode. Each day group opens a newest-first three-column gallery;
+  the lower-right Camera button returns to the existing camera root without
+  creating a second camera session.
 - Preview offers native Share, Save, and Delete actions. Share uses the system
   share sheet without Photos permission. Save requests Photos **add-only**
   access and exports a copy only after the user chooses Save. Delete removes
