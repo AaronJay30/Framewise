@@ -319,44 +319,76 @@ private struct CaptureFlightView: View {
     let onFinished: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var flashVisible = true
 
     @ViewBuilder
     var body: some View {
         if reduceMotion {
-            flightImage
+            flightOverlay
                 .transition(.opacity)
         } else {
-            flightImage
-                .matchedGeometryEffect(id: photo.id, in: namespace)
+            flightOverlay
         }
     }
 
-    private var flightImage: some View {
+    private var flightOverlay: some View {
+        ZStack {
+            Color.white
+                .opacity(flashVisible ? 0.12 : 0)
+                .ignoresSafeArea()
+
+            GeometryReader { proxy in
+                ZStack {
+                    if reduceMotion {
+                        flightImage(in: proxy.size)
+                            .transition(.opacity)
+                    } else {
+                        flightImage(in: proxy.size)
+                            .matchedGeometryEffect(id: photo.id, in: namespace)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .allowsHitTesting(false)
+        .task(id: photo.id) {
+            withAnimation(.easeOut(duration: reduceMotion ? 0.12 : 0.16)) {
+                flashVisible = false
+            }
+
+            do {
+                try await Task.sleep(
+                    for: .seconds(reduceMotion ? 0.14 : 0.18)
+                )
+            } catch {
+                return
+            }
+
+            withAnimation(
+                reduceMotion
+                    ? .easeOut(duration: 0.18)
+                    : .easeInOut(duration: 0.62)
+            ) {
+                onFinished()
+            }
+        }
+    }
+
+    private func flightImage(in size: CGSize) -> some View {
         Image(uiImage: image)
             .resizable()
             .scaledToFill()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
-            .background(.black)
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
-            .task(id: photo.id) {
-                do {
-                    try await Task.sleep(
-                        for: .seconds(reduceMotion ? 0.18 : 0.55)
-                    )
-                } catch {
-                    return
-                }
-
-                withAnimation(
-                    reduceMotion
-                        ? .easeOut(duration: 0.18)
-                        : .easeInOut(duration: 0.55)
-                ) {
-                    onFinished()
-                }
+            .frame(
+                width: min(size.width * 0.78, 360),
+                height: min(size.height * 0.62, 520)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(.white.opacity(0.52), lineWidth: 1)
             }
+            .shadow(color: .black.opacity(0.28), radius: 16, y: 8)
+            .opacity(0.94)
     }
 }
 

@@ -44,15 +44,20 @@ The screen flow is:
 
 ```text
 Camera
-  ├─ capture -> private app storage -> shrink/opacity flight to dock thumbnail
-  └─ Library -> Preview
-                 ├─ Share -> native UIActivityViewController
-                 ├─ Save -> PhotoKit add-only export of a copy
-                 ├─ Delete -> private FrameWise file/manifest only
-                 └─ Edit -> visible disabled placeholder
+  ├─ capture -> private app storage -> held card smoothly shrinks to dock thumbnail
+  └─ Library
+       ├─ By Day -> date group -> three-column gallery -> Preview
+       └─ All Photos -> three-column gallery -> Preview
+                                      ├─ Share -> native UIActivityViewController
+                                      ├─ Save -> PhotoKit add-only export of a copy
+                                      ├─ Delete -> private FrameWise file/manifest only
+                                      └─ Edit -> visible disabled placeholder
 ```
 
-`LibraryView` keeps captures newest first and its lower-right Camera button
+`CapturedPhotoGrouping` assigns each capture to a local calendar day while
+preserving newest-first order. `LibraryView` presents those groups and the
+All Photos mode; `PhotoGalleryView` reads the shared store by ID so a deleted
+photo disappears when the gallery reappears. The lower-right Camera button
 dismisses back to the existing camera root. `PhotoPreviewView` handles invalid
 or removed records with an unavailable state rather than force-unwrapping an
 image. The camera screen stops the existing session while Library is visible

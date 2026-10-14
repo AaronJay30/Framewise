@@ -8,6 +8,9 @@ struct LibraryView: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
+    @State private var mode: LibraryMode = .byDay
+
+    private var calendar: Calendar { .current }
 
     var body: some View {
         content
@@ -31,44 +34,102 @@ struct LibraryView: View {
         } else {
             VStack(spacing: 0) {
                 if let storageError = photoStore.storageError {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(storageError)
-                            .font(.footnote)
-                            .foregroundStyle(FrameWiseBrand.foreground(for: colorScheme).opacity(0.78))
-
-                        Button {
-                            Task { await photoStore.load() }
-                        } label: {
-                            Text("Try Again")
-                                .frame(minWidth: 110, minHeight: 44)
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(FrameWiseBrand.signalCoral)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 8)
-                    .background(FrameWiseBrand.signalCoral.opacity(0.14))
+                    storageErrorBanner(storageError)
                 }
 
-                photoList
+                modePicker
+                modeContent
             }
         }
     }
 
-    private var photoList: some View {
-        List(photoStore.photos) { photo in
-            NavigationLink {
-                PhotoPreviewView(photoID: photo.id, photoStore: photoStore)
-            } label: {
-                PhotoRow(photo: photo)
+    private var modePicker: some View {
+        Picker("Library view", selection: $mode) {
+            ForEach(LibraryMode.allCases) { mode in
+                Text(mode.title)
+                    .tag(mode)
             }
-            .listRowSeparator(.hidden)
-            .listRowBackground(Color.clear)
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
+        .pickerStyle(.segmented)
+        .accessibilityLabel("Library view")
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
+    }
+
+    @ViewBuilder
+    private var modeContent: some View {
+        switch mode {
+        case .byDay:
+            dayGroups
+        case .allPhotos:
+            PhotoGalleryView(title: "All Photos", photoStore: photoStore)
+        }
+    }
+
+    private var dayGroups: some View {
+        let groups = CapturedPhotoGrouping.groupByDay(
+            photoStore.photos,
+            calendar: calendar
+        )
+
+        return ScrollView {
+            LazyVStack(spacing: 14) {
+                ForEach(groups) { group in
+                    NavigationLink {
+                        PhotoGalleryView(
+                            title: dayTitle(for: group.day),
+                            photoStore: photoStore,
+                            photoIDs: Set(group.photos.map(\.id))
+                        )
+                    } label: {
+                        DayGroupCard(
+                            group: group,
+                            title: dayTitle(for: group.day)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+        }
+        .scrollIndicators(.hidden)
         .background(FrameWiseBrand.surface(for: colorScheme))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func dayTitle(for day: Date) -> String {
+        if calendar.isDateInToday(day) {
+            return "Today"
+        }
+
+        if calendar.isDateInYesterday(day) {
+            return "Yesterday"
+        }
+
+        return day.formatted(date: .abbreviated, time: .omitted)
+    }
+
+    private func storageErrorBanner(_ message: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(message)
+                .font(.footnote)
+                .foregroundStyle(FrameWiseBrand.foreground(for: colorScheme).opacity(0.78))
+
+            Button {
+                Task { await photoStore.load() }
+            } label: {
+                Text("Try Again")
+                    .frame(minWidth: 110, minHeight: 44)
+            }
+            .buttonStyle(.bordered)
+            .tint(FrameWiseBrand.signalCoral)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+        .background(FrameWiseBrand.signalCoral.opacity(0.14))
     }
 
     private var emptyState: some View {
@@ -138,54 +199,101 @@ struct LibraryView: View {
     }
 }
 
-private struct PhotoRow: View {
-    let photo: CapturedPhoto
+private enum LibraryMode: String, CaseIterable, Identifiable {
+    case byDay
+    case allPhotos
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .byDay:
+            "By Day"
+        case .allPhotos:
+            "All Photos"
+        }
+    }
+}
+
+private struct DayGroupCard: View {
+    let group: CapturedPhotoDayGroup
+    let title: String
 
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        HStack(spacing: 14) {
-            thumbnail
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.headline)
+                        .foregroundStyle(FrameWiseBrand.foreground(for: colorScheme))
 
-            VStack(alignment: .leading, spacing: 5) {
-                Text(photo.capturedAt, style: .date)
-                    .font(.headline)
-                    .foregroundStyle(FrameWiseBrand.foreground(for: colorScheme))
-
-                Text(photo.capturedAt, style: .time)
-                    .font(.subheadline)
-                    .foregroundStyle(FrameWiseBrand.foreground(for: colorScheme).opacity(0.68))
-
-                if photo.isExported {
-                    Label("Saved to Photos", systemImage: "checkmark.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(FrameWiseBrand.signalCoral)
+                    Text(photoCountLabel)
+                        .font(.subheadline)
+                        .foregroundStyle(FrameWiseBrand.foreground(for: colorScheme).opacity(0.68))
                 }
+
+                Spacer(minLength: 12)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(FrameWiseBrand.foreground(for: colorScheme).opacity(0.55))
             }
 
-            Spacer(minLength: 0)
+            HStack(spacing: 8) {
+                ForEach(Array(group.photos.prefix(4))) { photo in
+                    GroupThumbnail(photo: photo)
+                }
+
+                if group.photos.count > 4 {
+                    Text("+\(group.photos.count - 4)")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(FrameWiseBrand.foreground(for: colorScheme).opacity(0.72))
+                        .frame(width: 52, height: 64)
+                        .background(.secondary.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+
+                Spacer(minLength: 0)
+            }
         }
-        .padding(.vertical, 8)
-        .contentShape(Rectangle())
+        .padding(16)
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(
+                    FrameWiseBrand.foreground(for: colorScheme).opacity(0.1),
+                    lineWidth: 1
+                )
+        }
     }
 
-    @ViewBuilder
-    private var thumbnail: some View {
-        if let image = UIImage(data: photo.data) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 76, height: 92)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        } else {
-            ZStack {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(.secondary.opacity(0.18))
-                Image(systemName: "photo.badge.exclamationmark")
-                    .foregroundStyle(.secondary)
+    private var photoCountLabel: String {
+        group.photos.count == 1 ? "1 photo" : "\(group.photos.count) photos"
+    }
+}
+
+private struct GroupThumbnail: View {
+    let photo: CapturedPhoto
+
+    var body: some View {
+        Group {
+            if let image = UIImage(data: photo.data) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                ZStack {
+                    Color.secondary.opacity(0.12)
+                    Image(systemName: "photo.badge.exclamationmark")
+                        .foregroundStyle(.secondary)
+                }
             }
-            .frame(width: 76, height: 92)
         }
+        .frame(width: 52, height: 64)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 #endif
