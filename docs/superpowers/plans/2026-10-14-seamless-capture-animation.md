@@ -4,7 +4,7 @@
 
 **Goal:** Keep the live camera preview perceptibly active while a captured image briefly travels into the Library thumbnail.
 
-**Architecture:** Leave `CameraService`, `CameraViewModel`, persistent storage, and the pending-capture queue unchanged. Replace only the opaque full-screen `CaptureFlightView` treatment with a contained image card, a shorter ease-out flight, and an opacity-only reduced-motion path. Keep the existing matched-geometry destination so queued captures continue through the same storage boundary.
+**Architecture:** Leave `CameraService`, `CameraViewModel`, persistent storage, and the pending-capture queue unchanged. Replace only the opaque full-screen `CaptureFlightView` treatment with a contained image card, an explicit presentation hold, a 560–620 ms ease-in-out flight, and an opacity-only reduced-motion path. Keep the existing matched-geometry destination so queued captures continue through the same storage boundary.
 
 **Tech Stack:** Swift 6, SwiftUI, AVFoundation, XCTest, and xtool.
 
@@ -18,7 +18,7 @@
 
 - [x] Inspect the existing camera lifecycle, queue, matched-geometry destination, and reducer coverage.
 - [x] Keep the live preview visible by presenting the captured image as a centered, contained card rather than an opaque full-screen overlay.
-- [x] Use a short hold and approximately 300–350 ms ease-out flight; preserve the existing Reduced Motion opacity transition.
+- [x] Use a visible 150–180 ms hold followed by a 560–620 ms ease-in-out flight; preserve the existing Reduced Motion opacity transition.
 - [x] Preserve the existing queue/storage ordering and make no changes to capture-session lifecycle calls.
 - [x] Run the host tests, build the iOS target, and review the diff for unnecessary complexity.
 
