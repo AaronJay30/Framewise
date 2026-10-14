@@ -89,9 +89,12 @@ struct CameraScreen: View {
     /// The only persistent controls in this slice: library, shutter, flip.
     private var controlDock: some View {
         HStack(alignment: .center, spacing: 28) {
-            Button(action: {}) {
+            NavigationLink {
+                LibraryView(photoStore: photoStore)
+            } label: {
                 libraryThumbnail
             }
+            .buttonStyle(.plain)
             .accessibilityLabel("Library")
             .accessibilityHint("Your latest captured photo will appear here.")
 
