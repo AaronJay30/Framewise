@@ -6,6 +6,16 @@ public enum CapturedPhotoDiskStoreError: Error, Equatable, Sendable {
     case fileOperation(String)
 }
 
+public struct CapturedPhotoDiskLoadResult: Equatable, Sendable {
+    public let photos: [CapturedPhoto]
+    public let unavailableIDs: [UUID]
+
+    public init(photos: [CapturedPhoto], unavailableIDs: [UUID]) {
+        self.photos = photos
+        self.unavailableIDs = unavailableIDs
+    }
+}
+
 /// Persists captured photo bytes and metadata in FrameWise's private storage.
 public actor CapturedPhotoDiskStore {
     private struct ManifestEntry: Codable, Equatable, Sendable {
@@ -16,6 +26,7 @@ public actor CapturedPhotoDiskStore {
     }
 
     private static let manifestFilename = "manifest.json"
+    private static let manifestBackupFilename = "manifest.json.bak"
     private static let imageFileExtension = "data"
 
     private let directoryURL: URL
@@ -36,29 +47,26 @@ public actor CapturedPhotoDiskStore {
     public func load() throws -> [CapturedPhoto] {
         let entries = try readManifest()
 
-        return try entries.map { entry in
-            let imageURL = directoryURL.appendingPathComponent(entry.filename)
-            guard FileManager.default.fileExists(atPath: imageURL.path) else {
-                throw CapturedPhotoDiskStoreError.missingImage(entry.id)
-            }
+        return try entries.map(readPhoto)
+    }
 
+    public func loadAvailable() throws -> CapturedPhotoDiskLoadResult {
+        let entries = try readManifest()
+        var photos: [CapturedPhoto] = []
+        var unavailableIDs: [UUID] = []
+
+        for entry in entries {
             do {
-                let data = try Data(contentsOf: imageURL)
-                guard let photo = CapturedPhoto(
-                    id: entry.id,
-                    data: data,
-                    capturedAt: entry.capturedAt,
-                    isExported: entry.isExported
-                ) else {
-                    throw CapturedPhotoDiskStoreError.fileOperation("Stored image data was empty")
-                }
-                return photo
-            } catch let error as CapturedPhotoDiskStoreError {
-                throw error
+                photos.append(try readPhoto(entry))
             } catch {
-                throw CapturedPhotoDiskStoreError.fileOperation(error.localizedDescription)
+                unavailableIDs.append(entry.id)
             }
         }
+
+        return CapturedPhotoDiskLoadResult(
+            photos: photos,
+            unavailableIDs: unavailableIDs
+        )
     }
 
     public func save(_ photo: CapturedPhoto) throws {
@@ -102,35 +110,48 @@ public actor CapturedPhotoDiskStore {
             return
         }
 
-        let imageURL = directoryURL.appendingPathComponent(entries[index].filename)
+        let entry = entries[index]
+        let imageURL = directoryURL.appendingPathComponent(entry.filename)
+        entries.remove(at: index)
+        try writeManifest(entries)
+
         guard FileManager.default.fileExists(atPath: imageURL.path) else {
-            throw CapturedPhotoDiskStoreError.missingImage(id)
+            return
         }
 
         do {
             try FileManager.default.removeItem(at: imageURL)
         } catch {
+            var rollbackEntries = entries
+            rollbackEntries.insert(entry, at: min(index, rollbackEntries.count))
+            try? writeManifest(rollbackEntries)
             throw CapturedPhotoDiskStoreError.fileOperation(error.localizedDescription)
         }
-
-        entries.remove(at: index)
-        try writeManifest(entries)
     }
 
     private func readManifest() throws -> [ManifestEntry] {
         let manifestURL = directoryURL.appendingPathComponent(Self.manifestFilename)
-        guard FileManager.default.fileExists(atPath: manifestURL.path) else {
+        let backupURL = directoryURL.appendingPathComponent(Self.manifestBackupFilename)
+
+        if FileManager.default.fileExists(atPath: manifestURL.path) {
+            do {
+                return try decodeManifest(at: manifestURL)
+            } catch CapturedPhotoDiskStoreError.corruptManifest {
+                if let backupEntries = try? decodeManifest(at: backupURL) {
+                    try? restoreManifest(from: backupURL, to: manifestURL)
+                    return backupEntries
+                }
+                throw CapturedPhotoDiskStoreError.corruptManifest
+            }
+        }
+
+        guard FileManager.default.fileExists(atPath: backupURL.path) else {
             return []
         }
 
-        do {
-            let data = try Data(contentsOf: manifestURL)
-            return try JSONDecoder().decode([ManifestEntry].self, from: data)
-        } catch is DecodingError {
-            throw CapturedPhotoDiskStoreError.corruptManifest
-        } catch {
-            throw CapturedPhotoDiskStoreError.fileOperation(error.localizedDescription)
-        }
+        let backupEntries = try decodeManifest(at: backupURL)
+        try? restoreManifest(from: backupURL, to: manifestURL)
+        return backupEntries
     }
 
     private func writeManifest(_ entries: [ManifestEntry]) throws {
@@ -139,12 +160,32 @@ public actor CapturedPhotoDiskStore {
         do {
             let data = try JSONEncoder().encode(entries)
             try data.write(
+                to: directoryURL.appendingPathComponent(Self.manifestBackupFilename),
+                options: .atomic
+            )
+            try data.write(
                 to: directoryURL.appendingPathComponent(Self.manifestFilename),
                 options: .atomic
             )
         } catch {
             throw CapturedPhotoDiskStoreError.fileOperation(error.localizedDescription)
         }
+    }
+
+    private func decodeManifest(at url: URL) throws -> [ManifestEntry] {
+        do {
+            let data = try Data(contentsOf: url)
+            return try JSONDecoder().decode([ManifestEntry].self, from: data)
+        } catch is DecodingError {
+            throw CapturedPhotoDiskStoreError.corruptManifest
+        } catch {
+            throw CapturedPhotoDiskStoreError.fileOperation(error.localizedDescription)
+        }
+    }
+
+    private func restoreManifest(from sourceURL: URL, to destinationURL: URL) throws {
+        let data = try Data(contentsOf: sourceURL)
+        try data.write(to: destinationURL, options: .atomic)
     }
 
     private func ensureDirectory() throws {
@@ -160,5 +201,29 @@ public actor CapturedPhotoDiskStore {
 
     private func imageFilename(for id: UUID) -> String {
         "\(id.uuidString).\(Self.imageFileExtension)"
+    }
+
+    private func readPhoto(_ entry: ManifestEntry) throws -> CapturedPhoto {
+        let imageURL = directoryURL.appendingPathComponent(entry.filename)
+        guard FileManager.default.fileExists(atPath: imageURL.path) else {
+            throw CapturedPhotoDiskStoreError.missingImage(entry.id)
+        }
+
+        do {
+            let data = try Data(contentsOf: imageURL)
+            guard let photo = CapturedPhoto(
+                id: entry.id,
+                data: data,
+                capturedAt: entry.capturedAt,
+                isExported: entry.isExported
+            ) else {
+                throw CapturedPhotoDiskStoreError.fileOperation("Stored image data was empty")
+            }
+            return photo
+        } catch let error as CapturedPhotoDiskStoreError {
+            throw error
+        } catch {
+            throw CapturedPhotoDiskStoreError.fileOperation(error.localizedDescription)
+        }
     }
 }

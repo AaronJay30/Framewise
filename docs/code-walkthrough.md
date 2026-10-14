@@ -13,7 +13,8 @@ can be read from the outside in.
    inside a `NavigationStack`; it does not configure AVFoundation directly.
 3. `Sources/FrameWise/CameraViewModel.swift` is the bridge between service
    callbacks and SwiftUI. Its published `CameraState` is what the views render,
-   and each valid capture becomes a UUID-backed `CapturedPhoto`.
+   and each valid capture becomes a UUID-backed `CapturedPhoto` in a pending
+   delivery queue until private storage accepts it.
 4. `Sources/FrameWise/CameraService.swift` owns the AVFoundation session,
    camera selection, permissions, and photo capture. It keeps session work on
    its own queue so the UI stays responsive.
@@ -25,15 +26,19 @@ value. `CapturedPhotoLibrary` owns newest-first ordering and the narrow
 export/delete mutations used by the UI.
 
 `Sources/FrameWiseCore/CapturedPhotoDiskStore.swift` is an actor-backed private
-storage boundary. It keeps one captured image file per UUID and an atomic JSON
-manifest under `Application Support/FrameWise/Photos`. Loading the manifest
-restores the same order after a fresh app launch; corrupt manifests and missing
-image files surface typed recoverable errors instead of silently disappearing.
+storage boundary. It keeps one captured image file per UUID, an atomic JSON
+manifest, and a manifest backup under `Application Support/FrameWise/Photos`.
+Loading the manifest restores the same order after a fresh app launch; backup
+recovery and tolerant loading preserve healthy records when another image is
+missing, while unrecoverable storage problems surface as typed errors instead
+of silently disappearing.
 
 `Sources/FrameWise/CapturedPhotoStore.swift` bridges that actor to SwiftUI. A
-capture is validated and written before it is published to the Library. The
-store also persists the exported flag only after PhotoKit reports success and
-removes the private file before publishing a FrameWise-only deletion.
+capture is validated and written before it is published to the Library; a
+failed write stays queued with a visible retry path. The store also persists
+the exported flag only after PhotoKit reports success, coordinates in-flight
+exports across preview instances, and removes the private file before
+publishing a FrameWise-only deletion.
 
 The screen flow is:
 

@@ -9,6 +9,7 @@ final class CapturedPhotoStore: ObservableObject {
     @Published private(set) var photos: [CapturedPhoto] = []
     @Published private(set) var isLoading = false
     @Published private(set) var storageError: String?
+    @Published private(set) var exportingPhotoIDs = Set<UUID>()
 
     private var library = CapturedPhotoLibrary()
     private let diskStore: CapturedPhotoDiskStore
@@ -37,15 +38,17 @@ final class CapturedPhotoStore: ObservableObject {
         defer { isLoading = false }
 
         do {
-            let loadedPhotos = try await diskStore.load()
+            let result = try await diskStore.loadAvailable()
             var loadedLibrary = CapturedPhotoLibrary()
-            for photo in loadedPhotos.reversed() {
+            for photo in result.photos.reversed() {
                 loadedLibrary.insert(photo)
             }
 
             library = loadedLibrary
             photos = loadedLibrary.photos
-            storageError = nil
+            storageError = result.unavailableIDs.isEmpty
+                ? nil
+                : "Some saved photos are unavailable. Healthy photos are still available."
         } catch {
             storageError = "Your saved photos are temporarily unavailable. Try again."
         }
@@ -84,6 +87,26 @@ final class CapturedPhotoStore: ObservableObject {
             storageError = "FrameWise could not update that photo. Try again."
             return false
         }
+    }
+
+    func isExporting(id: UUID) -> Bool {
+        exportingPhotoIDs.contains(id)
+    }
+
+    @discardableResult
+    func beginExport(id: UUID) -> Bool {
+        guard !exportingPhotoIDs.contains(id),
+              let photo = library.photo(withID: id),
+              !photo.isExported else {
+            return false
+        }
+
+        exportingPhotoIDs.insert(id)
+        return true
+    }
+
+    func endExport(id: UUID) {
+        exportingPhotoIDs.remove(id)
     }
 
     func remove(id: UUID) async -> Bool {

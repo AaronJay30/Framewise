@@ -87,11 +87,15 @@ struct PhotoPreviewView: View {
                 }
 
                 if shouldShowPhotoSettings {
-                    Button("Open Settings", action: openPhotoSettings)
+                    Button(action: openPhotoSettings) {
+                        Text("Open Settings")
+                            .frame(minWidth: 130, minHeight: 44)
+                    }
                         .buttonStyle(.bordered)
                         .tint(.white)
-                        .frame(minHeight: 44)
                 }
+
+                let exportInProgress = isExporting || photoStore.isExporting(id: photoID)
 
                 HStack(spacing: 10) {
                     actionButton(
@@ -104,7 +108,7 @@ struct PhotoPreviewView: View {
                         title: saveTitle(for: photo),
                         systemImage: "square.and.arrow.down",
                         action: { saveToPhotos(photo) },
-                        isDisabled: isExporting || didExportInThisPreview || photo.isExported
+                        isDisabled: exportInProgress || didExportInThisPreview || photo.isExported
                     )
                     .accessibilityHint(
                         photo.isExported || didExportInThisPreview
@@ -171,12 +175,14 @@ struct PhotoPreviewView: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 290)
 
-            Button("Back") {
+            Button {
                 dismiss()
+            } label: {
+                Text("Back")
+                    .frame(minWidth: 110, minHeight: 44)
             }
             .buttonStyle(.borderedProminent)
             .tint(FrameWiseBrand.signalCoral)
-            .frame(minHeight: 44)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 24)
@@ -197,19 +203,30 @@ struct PhotoPreviewView: View {
     }
 
     private func saveTitle(for photo: CapturedPhoto) -> String {
-        if isExporting { return "Saving…" }
+        if isExporting || photoStore.isExporting(id: photoID) { return "Saving…" }
         if photo.isExported || didExportInThisPreview { return "Saved" }
         return "Save"
     }
 
     private func saveToPhotos(_ photo: CapturedPhoto) {
-        guard !isExporting, !photo.isExported, !didExportInThisPreview else { return }
+        guard !isExporting,
+              !photoStore.isExporting(id: photoID),
+              !photo.isExported,
+              !didExportInThisPreview,
+              photoStore.beginExport(id: photoID) else {
+            return
+        }
 
         isExporting = true
         exportMessage = nil
         shouldShowPhotoSettings = false
 
         Task { @MainActor in
+            defer {
+                photoStore.endExport(id: photoID)
+                isExporting = false
+            }
+
             do {
                 try await photoLibraryWriter.save(data: photo.data)
                 didExportInThisPreview = true
@@ -224,8 +241,6 @@ struct PhotoPreviewView: View {
             } catch {
                 exportMessage = "The photo could not be saved to Photos. Try again."
             }
-
-            isExporting = false
         }
     }
 

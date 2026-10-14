@@ -16,7 +16,7 @@ struct CameraScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var captureAnimationNamespace
     @State private var captureFlight: CapturedPhoto?
-    @State private var storedCaptureIDs = Set<UUID>()
+    @State private var isProcessingPendingCapture = false
 
     var body: some View {
         ZStack {
@@ -31,18 +31,34 @@ struct CameraScreen: View {
                     onFinished: finishCaptureFlight
                 )
             }
+
+            if let storageError = photoStore.storageError {
+                VStack {
+                    Spacer()
+                    storageErrorCard(storageError)
+                }
+                .padding(.bottom, showsControlDock ? 112 : 24)
+            }
         }
         .background(FrameWiseBrand.surface(for: colorScheme).ignoresSafeArea())
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if showsControlDock {
                 controlDock
+            } else if showsLibraryAccessDock {
+                libraryAccessDock
             }
         }
-        .onChange(of: viewModel.lastCapturedPhoto?.id) { _, _ in
-            storeLatestCapture()
+        .onChange(of: viewModel.pendingCapturedPhotos.count) { _, _ in
+            processPendingCaptures()
+        }
+        .onChange(of: photoStore.isLoading) { _, isLoading in
+            if !isLoading {
+                processPendingCaptures()
+            }
         }
         .onAppear {
             viewModel.start()
+            processPendingCaptures()
         }
         .onDisappear {
             viewModel.stop()
@@ -92,17 +108,19 @@ struct CameraScreen: View {
         }
     }
 
+    private var showsLibraryAccessDock: Bool {
+        switch viewModel.state {
+        case .permissionDenied, .unavailable:
+            true
+        case .initializing, .requestingPermission, .ready, .running, .captureFailed:
+            false
+        }
+    }
+
     /// The only persistent controls in this slice: library, shutter, flip.
     private var controlDock: some View {
         HStack(alignment: .center, spacing: 28) {
-            NavigationLink {
-                LibraryView(photoStore: photoStore)
-            } label: {
-                libraryThumbnail
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Library")
-            .accessibilityHint("Your latest captured photo will appear here.")
+            libraryLink
 
             Button(action: viewModel.capturePhoto) {
                 ZStack {
@@ -142,6 +160,36 @@ struct CameraScreen: View {
         .padding(.bottom, 10)
     }
 
+    private var libraryAccessDock: some View {
+        HStack {
+            Spacer()
+            libraryLink
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(FrameWiseBrand.ink.opacity(0.94))
+        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .stroke(.white.opacity(0.12), lineWidth: 1)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 10)
+    }
+
+    private var libraryLink: some View {
+        NavigationLink {
+            LibraryView(photoStore: photoStore)
+        } label: {
+            libraryThumbnail
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Library")
+        .accessibilityHint("Opens your captured photos.")
+    }
+
     @ViewBuilder
     private var libraryThumbnail: some View {
         if let photo = photoStore.latestPhoto,
@@ -176,24 +224,61 @@ struct CameraScreen: View {
             .clipShape(Circle())
     }
 
-    private func storeLatestCapture() {
-        guard let photo = viewModel.lastCapturedPhoto,
-              storedCaptureIDs.insert(photo.id).inserted else {
+    private func processPendingCaptures() {
+        guard !isProcessingPendingCapture,
+              captureFlight == nil,
+              !photoStore.isLoading,
+              let photo = viewModel.pendingCapturedPhotos.first else {
             return
         }
 
+        isProcessingPendingCapture = true
         Task { @MainActor in
-            guard await photoStore.add(photo) else {
-                storedCaptureIDs.remove(photo.id)
-                return
+            if await photoStore.add(photo) {
+                viewModel.consumeCapturedPhoto(id: photo.id)
+                captureFlight = photo
             }
 
-            captureFlight = photo
+            isProcessingPendingCapture = false
         }
     }
 
     private func finishCaptureFlight() {
         captureFlight = nil
+        processPendingCaptures()
+    }
+
+    private func storageErrorCard(_ message: String) -> some View {
+        VStack(spacing: 10) {
+            Text(message)
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.86))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 300)
+
+            Button(action: retryStorageAndPendingCaptures) {
+                Text("Try Again")
+                    .frame(minWidth: 110, minHeight: 44)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(FrameWiseBrand.signalCoral)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .background(FrameWiseBrand.ink.opacity(0.94))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(.white.opacity(0.12), lineWidth: 1)
+        }
+        .padding(.horizontal, 24)
+    }
+
+    private func retryStorageAndPendingCaptures() {
+        Task { @MainActor in
+            await photoStore.load()
+            processPendingCaptures()
+        }
     }
 
     private var captureFailureCard: some View {
@@ -301,10 +386,12 @@ private struct RecoveryStateView: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 310)
 
-            Button(actionTitle, action: action)
-                .buttonStyle(.borderedProminent)
-                .tint(FrameWiseBrand.signalCoral)
-                .frame(minHeight: 44)
+            Button(action: action) {
+                Text(actionTitle)
+                    .frame(minWidth: 120, minHeight: 44)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(FrameWiseBrand.signalCoral)
         }
         .padding(.horizontal, 28)
     }

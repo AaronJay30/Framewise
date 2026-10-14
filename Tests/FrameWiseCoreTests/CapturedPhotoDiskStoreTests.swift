@@ -60,6 +60,49 @@ final class CapturedPhotoDiskStoreTests: XCTestCase {
         XCTAssertEqual(try manifestEntries(in: directory)[0]["id"] as? String, second.id.uuidString)
     }
 
+    func testAC_PHOTO1014_ERR3_LoadAvailablePreservesHealthyRecordsWhenOneImageIsMissing() async throws {
+        let directory = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let missing = makePhoto(id: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA", byte: 0x01)
+        let healthy = makePhoto(id: "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB", byte: 0x02)
+        let store = CapturedPhotoDiskStore(directoryURL: directory)
+        try await store.save(missing)
+        try await store.save(healthy)
+        try FileManager.default.removeItem(at: directory.appendingPathComponent(imageFilename(for: missing)))
+
+        let result = try await store.loadAvailable()
+
+        XCTAssertEqual(result.photos, [healthy])
+        XCTAssertEqual(result.unavailableIDs, [missing.id])
+    }
+
+    func testAC_PHOTO1014_ERR3_RemoveMissingImageRemovesManifestRecord() async throws {
+        let directory = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let photo = makePhoto(id: "CCCCCCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC", byte: 0x03)
+        let store = CapturedPhotoDiskStore(directoryURL: directory)
+        try await store.save(photo)
+        try FileManager.default.removeItem(at: directory.appendingPathComponent(imageFilename(for: photo)))
+
+        try await store.remove(id: photo.id)
+
+        let remaining = try await store.load()
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
+    func testAC_PHOTO1014_ERR3_CorruptManifestRestoresFromManifestBackup() async throws {
+        let directory = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let photo = makePhoto(id: "DDDDDDDD-DDDD-DDDD-DDDD-DDDDDDDDDDDD", byte: 0x04)
+        let store = CapturedPhotoDiskStore(directoryURL: directory)
+        try await store.save(photo)
+        try Data("not-json".utf8).write(to: directory.appendingPathComponent("manifest.json"))
+
+        let restored = try await store.load()
+
+        XCTAssertEqual(restored, [photo])
+    }
+
     func testAC_PHOTO1014_E3_FreshStoreReloadsPreviouslySavedCapture() async throws {
         let directory = makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

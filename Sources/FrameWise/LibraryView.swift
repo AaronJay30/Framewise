@@ -31,13 +31,24 @@ struct LibraryView: View {
         } else {
             VStack(spacing: 0) {
                 if let storageError = photoStore.storageError {
-                    Text(storageError)
-                        .font(.footnote)
-                        .foregroundStyle(FrameWiseBrand.foreground(for: colorScheme).opacity(0.78))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .background(FrameWiseBrand.signalCoral.opacity(0.14))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(storageError)
+                            .font(.footnote)
+                            .foregroundStyle(FrameWiseBrand.foreground(for: colorScheme).opacity(0.78))
+
+                        Button {
+                            Task { await photoStore.load() }
+                        } label: {
+                            Text("Try Again")
+                                .frame(minWidth: 110, minHeight: 44)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(FrameWiseBrand.signalCoral)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 8)
+                    .background(FrameWiseBrand.signalCoral.opacity(0.14))
                 }
 
                 photoList
@@ -93,12 +104,14 @@ struct LibraryView: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 300)
 
-            Button("Try Again") {
+            Button {
                 Task { await photoStore.load() }
+            } label: {
+                Text("Try Again")
+                    .frame(minWidth: 110, minHeight: 44)
             }
             .buttonStyle(.borderedProminent)
             .tint(FrameWiseBrand.signalCoral)
-            .frame(minHeight: 44)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 24)
