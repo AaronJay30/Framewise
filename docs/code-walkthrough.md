@@ -13,11 +13,85 @@ can be read from the outside in.
    inside a `NavigationStack`; it does not configure AVFoundation directly.
 3. `Sources/FrameWise/CameraViewModel.swift` is the bridge between service
    callbacks and SwiftUI. Its published `CameraState` is what the views render,
-   and each valid capture becomes a UUID-backed `CapturedPhoto` in a pending
-   delivery queue until private storage accepts it.
+   while it also restores settings, owns the timer/focus lifecycles, and turns
+   each valid capture into a UUID-backed `CapturedPhoto` in a pending delivery
+   queue until private storage accepts it.
 4. `Sources/FrameWise/CameraService.swift` owns the AVFoundation session,
-   camera selection, permissions, and photo capture. It keeps session work on
-   its own queue so the UI stays responsive.
+   camera selection, permissions, settings application, and photo capture. It
+   keeps session work on its own queue so the UI stays responsive.
+
+## Camera settings and capture flow
+
+`Sources/FrameWiseCore/CameraSettings.swift` is the hardware-independent
+contract for Flash, Timer, Exposure, Tap Focus, Aspect, Zoom, and the five
+app-defined Photographic Styles. It provides safe defaults, Codable values for
+local persistence, normalized focus points, centered crop geometry, and pure
+style adjustments. `CameraSettingsTests` covers the choices, invariants,
+Codable round trip, and capture snapshot behavior on the host.
+
+`CameraScreen` uses `CameraTopControls` for cycling Flash, Timer, and Aspect;
+Tap Focus places a `FocusExposureOverlay` beside the reticle, and Styles opens
+the adjustable `CameraSettingsSheet`. `CameraZoomControls` places supported presets
+inside the preview. These views live in `CameraControls.swift`, whose
+`CameraGlass` modifier selects native Liquid Glass on iOS 26+, a legacy
+material fallback, or opaque black when Reduce Transparency is enabled.
+The bottom dock retains only Library/Shutter/Flip.
+
+The preview uses `CameraAspectRatio.previewSize` to fit the selected aspect
+into the available space. Its actual frame changes between square, portrait
+4:3, and portrait 16:9; there is no fixed 3:4 crop-mask container. The preview
+layer center-fills that frame, while photo processing uses the same selected
+aspect for its centered `cropRect`. Preview and photo connections
+use device-aware rotation coordinators, refreshed on camera changes, rather
+than assuming every sensor uses a 90-degree portrait rotation. The service
+publishes only the device ID to the main actor; preview rotation follows the
+coordinator's observed updates. Tap Focus and pinch stay on the preview itself,
+not the zoom controls above it. Long-pressing the reticle locks focus; the
+attached vertical line maps upward dragging to positive EV and downward
+dragging to negative EV. The user-facing range caps wide device ranges at ±2 EV.
+Zoom buttons have explicit touch shapes and a non-interactive glass background.
+`CameraControlTests` covers wraparound cycling, exposure drag direction/limits,
+preview sizing, ruler coordinates, hardware-change selection, and
+`CameraZoomScale` conversion and supported preset filtering.
+
+`CameraService` applies device-dependent exposure, zoom, flash, and focus on
+its serial session queue. A capture stores its immutable `CameraSettings`
+snapshot by photo request ID before it enters the existing callback boundary,
+so a later settings change cannot alter that photo's processing choice. The
+active camera publishes exposure and zoom ranges plus flash availability after
+configuration and flips.
+
+Focus locking changes only the focus mode, leaving continuous exposure available
+for the attached exposure control.
+
+The service compares requested exposure/zoom against the last applied settings
+before locking the device. Preset zoom uses the device's native ramp; pinch and
+Reduce Motion use direct updates. A pinch takes its starting zoom from the
+actual device position on the session queue, so interrupting a preset ramp
+does not jump to its unfinished target. Capture cancels any ramp before applying
+its snapshot. Capability callbacks are not repeated for every drag update, and the
+preview layer's session is only assigned when its identity changes. Settings
+persistence is debounced by 250 ms, with an explicit flush on stop/resign-active.
+
+Photographic styles are represented by pure adjustment values plus a persisted
+intensity. The style studio uses generated gradient artwork rather than a
+placeholder photo, while the same interpolated adjustments are applied to the
+live preview and processed capture.
+
+Rear-camera selection prefers triple/dual-wide/dual virtual devices before
+falling back to the wide-angle camera. On iOS 18+, the system's display zoom
+multiplier translates hardware zoom into familiar .5/1x/2x values; iOS 17
+uses the first ultrawide-to-wide switch-over factor. Both published bounds and
+applied zoom use the same scale, so a .5 selection is not silently clamped to 1.
+
+`Sources/FrameWise/CameraPhotoProcessor.swift` normalizes the captured image,
+applies centered aspect cropping and the selected style, then encodes the
+result for the existing library flow. `CameraPhotoProcessingPolicy` is the
+small pure fallback contract: if processing cannot decode, filter, crop, or
+encode, the original capture bytes continue through storage. Processing is
+serialized for capture order but runs off the main actor. Its invalid-data test
+runs in the host suite; UIKit/Core Image execution is compile-checked by
+`xtool dev build`.
 
 ## Persistent captured-photo flow
 
@@ -128,7 +202,19 @@ swift test
 xtool dev build
 ```
 
-The host suite covers camera/branding state, captured-photo ordering and
-export/deletion state, disk restore ordering, manifest corruption, missing
-images, and app-private removal. `xtool dev build` covers the SwiftUI,
-AVFoundation, UIKit, and PhotoKit adapters that cannot run on the host.
+The host suite covers camera/branding state, camera settings contracts and
+processing fallback, captured-photo ordering and export/deletion state, disk
+restore ordering, manifest corruption, missing images, and app-private
+removal. `xtool dev build` covers the SwiftUI, AVFoundation, UIKit, Core Image,
+and PhotoKit adapters that cannot run on the host. Physical-device checks are
+still required for hardware support, timer cancellation on disappearance,
+focus/exposure response, flash behavior, and accessibility across device
+sizes. The remaining manual acceptance map is `[AC-CAMSET1014-F1]` and
+`[AC-CAMSET1014-F9]` for top controls, styles layout, and touch targets,
+`[AC-CAMSET1014-F4]`/`[AC-CAMSET1014-F5]`/`[AC-CAMSET1014-F7]` for live
+exposure, focus, preset/pinch zoom, and preview-to-capture framing,
+`[AC-CAMSET1014-E1]` for unsupported device
+capabilities, `[AC-CAMSET1014-E2]` for timer cancellation, and
+`[AC-CAMSET1014-S1]` for the existing permission and app-private storage
+boundaries. `[AC-CAMSET1014-E3]` has a host fallback-policy test and still
+needs one valid-image/failure-path device check.

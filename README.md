@@ -10,13 +10,16 @@ reference-photo alignment, and on-device AI guidance.
 > camera permission recovery, live preview shell, still capture service,
 > capture-to-library flight animation, Library/Preview navigation, native Share,
 > add-only Save-to-Photos export, FrameWise-only Delete, and a disabled Edit
-> placeholder.
+> placeholder. The camera has cycling top controls, a resizable portrait preview,
+> tap-to-focus exposure control, preview zoom presets, and an adjustable style
+> studio.
 
 ## Product and design documents
 
 - [Product design](docs/superpowers/specs/2026-10-12-ai-composition-camera-design.md)
 - [Layout and visual design](docs/superpowers/specs/2026-10-12-framewise-layout-design.md)
 - [Camera foundation design](docs/superpowers/specs/2026-10-13-camera-foundation-design.md)
+- [Camera settings design](docs/superpowers/specs/2026-10-14-camera-settings-design.md)
 - [Code walkthrough](docs/code-walkthrough.md)
 
 ## Verified setup
@@ -31,9 +34,10 @@ Verified on 2026-10-12 from Ubuntu running under WSL2:
 - Physical iPhone detected by `idevice_id` and `xtool devices --usb`.
 - Starter SwiftUI app built successfully with `xtool dev`.
 - The current camera foundation builds successfully with `xtool dev build`.
-- Physical-device camera verification is the next validation step for this
-  slice; personal Apple account details and the device UDID are not stored in
-  this repository.
+- The camera settings slice builds successfully with `xtool dev build`.
+- Physical-device verification of camera settings is the next validation step;
+  personal Apple account details and the device UDID are not stored in this
+  repository.
 
 Personal Apple account details and the device UDID are intentionally not
 stored in this repository.
@@ -53,6 +57,8 @@ FrameWise/
 │   │   ├── CameraService.swift
 │   │   ├── CameraViewModel.swift
 │   │   ├── CapturedPhotoStore.swift
+│   │   ├── CameraPhotoProcessor.swift
+│   │   ├── CameraSettingsSheet.swift
 │   │   ├── CameraPreview.swift
 │   │   ├── CameraScreen.swift
 │   │   ├── LibraryView.swift
@@ -63,6 +69,8 @@ FrameWise/
 │   └── FrameWiseCore/
 │       ├── CameraState.swift
 │       ├── CameraStateReducer.swift
+│       ├── CameraSettings.swift
+│       ├── CameraPhotoProcessingPolicy.swift
 │       ├── BrandingTokens.swift
 │       ├── CapturedPhoto.swift
 │       ├── CapturedPhotoGrouping.swift
@@ -71,6 +79,8 @@ FrameWise/
 ├── Tests/FrameWiseCoreTests/
 │   ├── CameraStateReducerTests.swift
 │   ├── BrandingTokenTests.swift
+│   ├── CameraSettingsTests.swift
+│   ├── CameraPhotoProcessingPolicyTests.swift
 │   ├── CapturedPhotoGroupingTests.swift
 │   ├── CapturedPhotoLibraryTests.swift
 │   └── CapturedPhotoDiskStoreTests.swift
@@ -84,14 +94,56 @@ FrameWise/
     └── superpowers/specs/
 ```
 
-The core state target is hardware-independent so the reducer and persistent
-photo tests run on the host. `CapturedPhotoDiskStore` writes one image file per
-capture plus an atomic manifest under the app's private Application Support
-directory. `CapturedPhotoStore` loads that library again on relaunch and only
-publishes a new item after the private write succeeds. The camera target is the
-iOS-facing layer; its AVFoundation work stays in `CameraService`, while SwiftUI
-reads state through `CameraViewModel` and shares one photo store across Camera,
+The core state target is hardware-independent so settings invariants, the
+reducer, and persistent photo tests run on the host. `CameraSettings` owns
+defaults, Codable persistence values, device-independent crop geometry, and
+style parameters. `CapturedPhotoDiskStore` writes one image file per capture
+plus an atomic manifest under the app's private Application Support directory.
+`CapturedPhotoStore` loads that library again on relaunch and only publishes a
+new item after the private write succeeds. The camera target is the iOS-facing
+layer; its AVFoundation work stays in `CameraService`, while SwiftUI reads
+state through `CameraViewModel` and shares one photo store across Camera,
 Library, and Preview.
+
+## Camera settings flow
+
+The Camera screen puts direct cycling controls at the top: Flash
+Off → Auto → On, Timer Off → 3s → 5s → 10s, and Aspect 4:3 → 1:1 → 16:9.
+Rectangular aspects are portrait (3 wide by 4 high, or 9 wide by 16 high).
+The whole preview resizes to the selected aspect, surrounded by the black
+camera canvas without a white outline. Tapping the preview focuses at that
+point and reveals a small vertical exposure line beside the focus marker:
+swipe up to brighten and down to darken. Long-press the marker to lock or
+unlock focus. The user-facing exposure range is capped at ±2 EV even when the
+hardware exposes a wider range. Styles have their own studio panel with
+selectable looks and a 0–100% intensity control, including Reset camera
+settings.
+
+Zoom presets sit inside the preview with individual touch targets; pinch
+remains available for intermediate values. Preset changes use a native zoom
+ramp unless Reduce Motion is enabled. The rear camera prefers a virtual
+multi-lens device, and .5 appears
+only when the active camera supports it. Presets are zoom factors, not a claim
+that every value is a separate optical lens. The bottom dock contains only
+Library, Shutter, and Flip. Controls use native Liquid Glass on iOS 26+,
+standard materials on iOS 17–18, and opaque surfaces with Reduce Transparency.
+Settings are restored from local `UserDefaults`; Flash Off is the fresh-install
+and reset default, while existing saved preferences are preserved. Each capture
+receives an immutable settings snapshot.
+
+The service applies exposure, focus, and zoom on its serial session queue.
+Continuous adjustments skip unchanged sensor settings and debounce local
+preference writes; leaving the camera or resigning active flushes preferences.
+Aspect and app-defined style choices are applied at the capture-to-library
+boundary by `CameraPhotoProcessor`; `CameraPhotoProcessingPolicy` returns the
+original capture bytes whenever decoding, filtering, cropping, or encoding
+cannot complete.
+
+Physical-device checks still required for this revision: cycle all three
+aspects and compare saved framing; tap every supported zoom preset; drag the
+exposure ruler in both directions and to its limits; try rapid pinch/preset
+changes, front/back switching, VoiceOver, large text, and Reduce Motion.
+Camera frame rate and gesture responsiveness have not been measured on-device.
 
 ## Captured photo flow
 
