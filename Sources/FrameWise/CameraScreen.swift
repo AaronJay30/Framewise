@@ -9,19 +9,59 @@ import FrameWiseCore
 /// and one quiet dock with exactly three controls.
 struct CameraScreen: View {
     @ObservedObject var viewModel: CameraViewModel
+    @ObservedObject var photoStore: CapturedPhotoStore
 
     @Environment(\.openURL) private var openURL
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var captureAnimationNamespace
+    @State private var captureFlight: CapturedPhoto?
+    @State private var isProcessingPendingCapture = false
 
     var body: some View {
         ZStack {
             cameraContent
+
+            if let captureFlight,
+               let image = UIImage(data: captureFlight.data) {
+                CaptureFlightView(
+                    photo: captureFlight,
+                    image: image,
+                    namespace: captureAnimationNamespace,
+                    onFinished: finishCaptureFlight
+                )
+            }
+
+            if let storageError = photoStore.storageError {
+                VStack {
+                    Spacer()
+                    storageErrorCard(storageError)
+                }
+                .padding(.bottom, showsControlDock ? 112 : 24)
+            }
         }
         .background(FrameWiseBrand.surface(for: colorScheme).ignoresSafeArea())
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if showsControlDock {
                 controlDock
+            } else if showsLibraryAccessDock {
+                libraryAccessDock
             }
+        }
+        .onChange(of: viewModel.pendingCapturedPhotos.count) { _, _ in
+            processPendingCaptures()
+        }
+        .onChange(of: photoStore.isLoading) { _, isLoading in
+            if !isLoading {
+                processPendingCaptures()
+            }
+        }
+        .onAppear {
+            viewModel.start()
+            processPendingCaptures()
+        }
+        .onDisappear {
+            viewModel.stop()
         }
     }
 
@@ -68,19 +108,19 @@ struct CameraScreen: View {
         }
     }
 
+    private var showsLibraryAccessDock: Bool {
+        switch viewModel.state {
+        case .permissionDenied, .unavailable:
+            true
+        case .initializing, .requestingPermission, .ready, .running, .captureFailed:
+            false
+        }
+    }
+
     /// The only persistent controls in this slice: library, shutter, flip.
     private var controlDock: some View {
         HStack(alignment: .center, spacing: 28) {
-            Button(action: {}) {
-                Image(systemName: viewModel.lastPhotoData == nil ? "photo" : "photo.fill")
-                    .font(.system(size: 19, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
-                    .background(.white.opacity(0.12))
-                    .clipShape(Circle())
-            }
-            .accessibilityLabel("Library")
-            .accessibilityHint("Your latest captured photo will appear here.")
+            libraryLink
 
             Button(action: viewModel.capturePhoto) {
                 ZStack {
@@ -120,6 +160,127 @@ struct CameraScreen: View {
         .padding(.bottom, 10)
     }
 
+    private var libraryAccessDock: some View {
+        HStack {
+            Spacer()
+            libraryLink
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(FrameWiseBrand.ink.opacity(0.94))
+        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .stroke(.white.opacity(0.12), lineWidth: 1)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 10)
+    }
+
+    private var libraryLink: some View {
+        NavigationLink {
+            LibraryView(photoStore: photoStore)
+        } label: {
+            libraryThumbnail
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Library")
+        .accessibilityHint("Opens your captured photos.")
+    }
+
+    @ViewBuilder
+    private var libraryThumbnail: some View {
+        if let photo = photoStore.latestPhoto,
+           let image = UIImage(data: photo.data) {
+            if reduceMotion {
+                thumbnailImage(image)
+                    .opacity(captureFlight?.id == photo.id ? 0 : 1)
+            } else {
+                thumbnailImage(image)
+                    .matchedGeometryEffect(
+                        id: photo.id,
+                        in: captureAnimationNamespace,
+                        isSource: captureFlight?.id != photo.id
+                    )
+                    .opacity(captureFlight?.id == photo.id ? 0 : 1)
+            }
+        } else {
+            Image(systemName: "photo")
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(.white.opacity(0.12))
+                .clipShape(Circle())
+        }
+    }
+
+    private func thumbnailImage(_ image: UIImage) -> some View {
+        Image(uiImage: image)
+            .resizable()
+            .scaledToFill()
+            .frame(width: 44, height: 44)
+            .clipShape(Circle())
+    }
+
+    private func processPendingCaptures() {
+        guard !isProcessingPendingCapture,
+              captureFlight == nil,
+              !photoStore.isLoading,
+              let photo = viewModel.pendingCapturedPhotos.first else {
+            return
+        }
+
+        isProcessingPendingCapture = true
+        Task { @MainActor in
+            if await photoStore.add(photo) {
+                viewModel.consumeCapturedPhoto(id: photo.id)
+                captureFlight = photo
+            }
+
+            isProcessingPendingCapture = false
+        }
+    }
+
+    private func finishCaptureFlight() {
+        captureFlight = nil
+        processPendingCaptures()
+    }
+
+    private func storageErrorCard(_ message: String) -> some View {
+        VStack(spacing: 10) {
+            Text(message)
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.86))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 300)
+
+            Button(action: retryStorageAndPendingCaptures) {
+                Text("Try Again")
+                    .frame(minWidth: 110, minHeight: 44)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(FrameWiseBrand.signalCoral)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .background(FrameWiseBrand.ink.opacity(0.94))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(.white.opacity(0.12), lineWidth: 1)
+        }
+        .padding(.horizontal, 24)
+    }
+
+    private func retryStorageAndPendingCaptures() {
+        Task { @MainActor in
+            await photoStore.load()
+            processPendingCaptures()
+        }
+    }
+
     private var captureFailureCard: some View {
         VStack(spacing: 10) {
             Text("Photo not captured")
@@ -151,6 +312,54 @@ struct CameraScreen: View {
     }
 }
 
+private struct CaptureFlightView: View {
+    let photo: CapturedPhoto
+    let image: UIImage
+    let namespace: Namespace.ID
+    let onFinished: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    @ViewBuilder
+    var body: some View {
+        if reduceMotion {
+            flightImage
+                .transition(.opacity)
+        } else {
+            flightImage
+                .matchedGeometryEffect(id: photo.id, in: namespace)
+        }
+    }
+
+    private var flightImage: some View {
+        Image(uiImage: image)
+            .resizable()
+            .scaledToFill()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+            .background(.black)
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            .task(id: photo.id) {
+                do {
+                    try await Task.sleep(
+                        for: .seconds(reduceMotion ? 0.18 : 0.55)
+                    )
+                } catch {
+                    return
+                }
+
+                withAnimation(
+                    reduceMotion
+                        ? .easeOut(duration: 0.18)
+                        : .easeInOut(duration: 0.55)
+                ) {
+                    onFinished()
+                }
+            }
+    }
+}
+
 /// One rounded recovery action for permission and hardware failures.
 private struct RecoveryStateView: View {
     let symbolName: String
@@ -177,10 +386,12 @@ private struct RecoveryStateView: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 310)
 
-            Button(actionTitle, action: action)
-                .buttonStyle(.borderedProminent)
-                .tint(FrameWiseBrand.signalCoral)
-                .frame(minHeight: 44)
+            Button(action: action) {
+                Text(actionTitle)
+                    .frame(minWidth: 120, minHeight: 44)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(FrameWiseBrand.signalCoral)
         }
         .padding(.horizontal, 28)
     }

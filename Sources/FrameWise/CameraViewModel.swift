@@ -9,7 +9,8 @@ import SwiftUI
 @MainActor
 final class CameraViewModel: ObservableObject, CameraServiceDelegate {
     @Published private(set) var state: CameraState = .initializing
-    @Published private(set) var lastPhotoData: Data?
+    @Published private(set) var lastCapturedPhoto: CapturedPhoto?
+    @Published private(set) var pendingCapturedPhotos: [CapturedPhoto] = []
 
     let session: AVCaptureSession
 
@@ -28,6 +29,11 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
         service.start()
     }
 
+    /// Stops the running session while keeping its configuration available for reuse.
+    func stop() {
+        service.stop()
+    }
+
     /// Restarts the service after a permission, hardware, or capture failure.
     func retry() {
         state = CameraStateReducer.reduce(state, event: .retry)
@@ -44,6 +50,11 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
         service.capturePhoto()
     }
 
+    /// Removes a capture from the model-owned delivery queue after storage succeeds.
+    func consumeCapturedPhoto(id: UUID) {
+        pendingCapturedPhotos.removeAll { $0.id == id }
+    }
+
     // MARK: - CameraServiceDelegate
 
     func cameraService(_ cameraService: CameraService, didEmit event: CameraEvent) {
@@ -51,7 +62,17 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
     }
 
     func cameraService(_ cameraService: CameraService, didCapturePhoto data: Data) {
-        lastPhotoData = data
+        guard let photo = CapturedPhoto(
+            id: UUID(),
+            data: data,
+            capturedAt: Date(),
+            isExported: false
+        ) else {
+            return
+        }
+
+        lastCapturedPhoto = photo
+        pendingCapturedPhotos.append(photo)
     }
 }
 #endif
