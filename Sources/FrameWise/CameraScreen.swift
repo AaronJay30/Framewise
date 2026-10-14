@@ -72,7 +72,7 @@ struct CameraScreen: View {
     private var controlDock: some View {
         HStack(alignment: .center, spacing: 28) {
             Button(action: {}) {
-                Image(systemName: viewModel.lastPhotoData == nil ? "photo" : "photo.fill")
+                Image(systemName: viewModel.lastCapturedPhoto == nil ? "photo" : "photo.fill")
                     .font(.system(size: 19, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 44, height: 44)

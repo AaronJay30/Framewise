@@ -9,7 +9,7 @@ import SwiftUI
 @MainActor
 final class CameraViewModel: ObservableObject, CameraServiceDelegate {
     @Published private(set) var state: CameraState = .initializing
-    @Published private(set) var lastPhotoData: Data?
+    @Published private(set) var lastCapturedPhoto: CapturedPhoto?
 
     let session: AVCaptureSession
 
@@ -26,6 +26,11 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
     /// Starts camera authorization and session setup.
     func start() {
         service.start()
+    }
+
+    /// Stops the running session while keeping its configuration available for reuse.
+    func stop() {
+        service.stop()
     }
 
     /// Restarts the service after a permission, hardware, or capture failure.
@@ -51,7 +56,12 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
     }
 
     func cameraService(_ cameraService: CameraService, didCapturePhoto data: Data) {
-        lastPhotoData = data
+        lastCapturedPhoto = CapturedPhoto(
+            id: UUID(),
+            data: data,
+            capturedAt: Date(),
+            isExported: false
+        )
     }
 }
 #endif
