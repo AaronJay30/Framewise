@@ -5,10 +5,12 @@ photos in real time. It will combine a custom camera, composition overlays,
 reference-photo alignment, and on-device AI guidance.
 
 > Current state: the Windows + WSL2 + xtool development pipeline is set up,
-> and the branded camera foundation is implemented. The iOS app builds with
-> the Open Crop icon, state-driven opener, camera permission recovery, live
-> preview shell, still capture service, rounded three-control dock, system
-> light/dark appearance support, and a transparent clear-logo companion asset.
+> and the branded camera foundation plus persistent captured-photo library are
+> implemented. The iOS app builds with the Open Crop icon, state-driven opener,
+> camera permission recovery, live preview shell, still capture service,
+> capture-to-library flight animation, Library/Preview navigation, native Share,
+> add-only Save-to-Photos export, FrameWise-only Delete, and a disabled Edit
+> placeholder.
 
 ## Product and design documents
 
@@ -50,15 +52,25 @@ FrameWise/
 │   │   ├── BrandIntroView.swift
 │   │   ├── CameraService.swift
 │   │   ├── CameraViewModel.swift
+│   │   ├── CapturedPhotoStore.swift
 │   │   ├── CameraPreview.swift
-│   │   └── CameraScreen.swift
+│   │   ├── CameraScreen.swift
+│   │   ├── LibraryView.swift
+│   │   ├── PhotoPreviewView.swift
+│   │   ├── PhotoLibraryWriter.swift
+│   │   └── ShareSheet.swift
 │   └── FrameWiseCore/
 │       ├── CameraState.swift
 │       ├── CameraStateReducer.swift
-│       └── BrandingTokens.swift
+│       ├── BrandingTokens.swift
+│       ├── CapturedPhoto.swift
+│       ├── CapturedPhotoLibrary.swift
+│       └── CapturedPhotoDiskStore.swift
 ├── Tests/FrameWiseCoreTests/
 │   ├── CameraStateReducerTests.swift
-│   └── BrandingTokenTests.swift
+│   ├── BrandingTokenTests.swift
+│   ├── CapturedPhotoLibraryTests.swift
+│   └── CapturedPhotoDiskStoreTests.swift
 ├── Resources/
 │   ├── FrameWiseAppIcon.svg
 │   ├── FrameWiseAppIcon.png
@@ -69,9 +81,30 @@ FrameWise/
     └── superpowers/specs/
 ```
 
-The core state target is hardware-independent so the reducer tests run on the
-host. The camera target is the iOS-facing layer; its AVFoundation work stays
-in `CameraService`, while SwiftUI reads state through `CameraViewModel`.
+The core state target is hardware-independent so the reducer and persistent
+photo tests run on the host. `CapturedPhotoDiskStore` writes one image file per
+capture plus an atomic manifest under the app's private Application Support
+directory. `CapturedPhotoStore` loads that library again on relaunch and only
+publishes a new item after the private write succeeds. The camera target is the
+iOS-facing layer; its AVFoundation work stays in `CameraService`, while SwiftUI
+reads state through `CameraViewModel` and shares one photo store across Camera,
+Library, and Preview.
+
+## Captured photo flow
+
+- Capture stays on Camera. After the private app-storage write succeeds, the
+  captured image briefly shrinks into the dock's Library thumbnail. Reduced
+  Motion uses an opacity-only completion transition.
+- Library lists stored captures newest first and restores them after relaunch.
+  Its lower-right Camera button returns to the existing camera root; it does
+  not create a second camera session.
+- Preview offers native Share, Save, and Delete actions. Share uses the system
+  share sheet without Photos permission. Save requests Photos **add-only**
+  access and exports a copy only after the user chooses Save. Delete removes
+  only the private FrameWise copy and never removes an already-exported Photos
+  copy. Edit is visible but disabled until the editing slice is implemented.
+- FrameWise never requests Photos read access and does not upload captures to a
+  network service.
 The bundle ID in `xtool.yml` is still the generated placeholder and should be
 changed before distributing the app.
 
@@ -232,15 +265,14 @@ Developer Mode is under **Settings → Privacy & Security → Developer Mode**.
 
 1. Verify the branded opener, permission recovery, camera switching, and
    still capture on a connected iPhone, including Reduced Motion.
-2. Replace the library placeholder with a local captured-photo surface.
-3. Add rule-of-thirds, golden spiral/Fibonacci, and horizon overlays.
-4. Add the AI Guide UI: subject marker, target dot, arrow, and short label.
-5. Add reference-photo overlay with opacity, scale, position, and lock.
-6. Add offline Vision/Core ML scene analysis for scenery and landscapes.
-7. Add the composition recommendation and alignment engine.
-8. Ensure saved photos exclude all guides, arrows, labels, and reference
+2. Add rule-of-thirds, golden spiral/Fibonacci, and horizon overlays.
+3. Add the AI Guide UI: subject marker, target dot, arrow, and short label.
+4. Add reference-photo overlay with opacity, scale, position, and lock.
+5. Add offline Vision/Core ML scene analysis for scenery and landscapes.
+6. Add the composition recommendation and alignment engine.
+7. Ensure exported photos exclude all guides, arrows, labels, and reference
    overlays.
-9. Add device testing for low confidence, alignment stability, battery use,
+8. Add device testing for low confidence, alignment stability, battery use,
    and reduced motion.
 
 ## Product rules to preserve

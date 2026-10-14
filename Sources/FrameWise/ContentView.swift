@@ -27,8 +27,6 @@ struct ContentView: View {
             }
         }
         .task {
-            viewModel.start()
-
             do {
                 try await Task.sleep(
                     for: .seconds(FrameWiseBrandToken.minimumBrandIntroDuration)

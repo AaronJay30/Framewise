@@ -8,15 +8,54 @@ can be read from the outside in.
 
 1. `Sources/FrameWise/FrameWiseApp.swift` is the app entry point. It creates
    the SwiftUI scene and hands the first screen to `ContentView`.
-2. `Sources/FrameWise/ContentView.swift` is the composition root. It should
-   own the screen-level view model and compose the camera screen, opener, and
-   recovery states; it should not configure AVFoundation directly.
-3. `Sources/FrameWise/CameraViewModel.swift` will be the bridge between
-   service callbacks and SwiftUI. Its published `CameraState` is what the
-   views render.
-4. `Sources/FrameWise/CameraService.swift` will own the AVFoundation session,
+2. `Sources/FrameWise/ContentView.swift` is the composition root. It owns one
+   `CameraViewModel` and one `CapturedPhotoStore`, then places the camera root
+   inside a `NavigationStack`; it does not configure AVFoundation directly.
+3. `Sources/FrameWise/CameraViewModel.swift` is the bridge between service
+   callbacks and SwiftUI. Its published `CameraState` is what the views render,
+   and each valid capture becomes a UUID-backed `CapturedPhoto`.
+4. `Sources/FrameWise/CameraService.swift` owns the AVFoundation session,
    camera selection, permissions, and photo capture. It keeps session work on
    its own queue so the UI stays responsive.
+
+## Persistent captured-photo flow
+
+`Sources/FrameWiseCore/CapturedPhoto.swift` is the hardware-independent photo
+value. `CapturedPhotoLibrary` owns newest-first ordering and the narrow
+export/delete mutations used by the UI.
+
+`Sources/FrameWiseCore/CapturedPhotoDiskStore.swift` is an actor-backed private
+storage boundary. It keeps one captured image file per UUID and an atomic JSON
+manifest under `Application Support/FrameWise/Photos`. Loading the manifest
+restores the same order after a fresh app launch; corrupt manifests and missing
+image files surface typed recoverable errors instead of silently disappearing.
+
+`Sources/FrameWise/CapturedPhotoStore.swift` bridges that actor to SwiftUI. A
+capture is validated and written before it is published to the Library. The
+store also persists the exported flag only after PhotoKit reports success and
+removes the private file before publishing a FrameWise-only deletion.
+
+The screen flow is:
+
+```text
+Camera
+  ├─ capture -> private app storage -> shrink/opacity flight to dock thumbnail
+  └─ Library -> Preview
+                 ├─ Share -> native UIActivityViewController
+                 ├─ Save -> PhotoKit add-only export of a copy
+                 ├─ Delete -> private FrameWise file/manifest only
+                 └─ Edit -> visible disabled placeholder
+```
+
+`LibraryView` keeps captures newest first and its lower-right Camera button
+dismisses back to the existing camera root. `PhotoPreviewView` handles invalid
+or removed records with an unavailable state rather than force-unwrapping an
+image. The camera screen stops the existing session while Library is visible
+and starts that same configured service again when Camera reappears.
+
+PhotoKit is intentionally limited to `PHPhotoLibrary` add-only authorization
+for an explicit Preview Save. FrameWise requests no Photos read permission and
+does not send images to a network service.
 
 ## The testable state boundary
 
@@ -75,8 +114,11 @@ Reduce Motion replaces the spatial entrance with a short opacity transition.
 From the project directory, run:
 
 ```text
-swift test --filter CameraStateReducerTests
+swift test
+xtool dev build
 ```
 
-The focused test suite covers permission, hardware availability, session
-startup, capture failure, and retry transitions.
+The host suite covers camera/branding state, captured-photo ordering and
+export/deletion state, disk restore ordering, manifest corruption, missing
+images, and app-private removal. `xtool dev build` covers the SwiftUI,
+AVFoundation, UIKit, and PhotoKit adapters that cannot run on the host.

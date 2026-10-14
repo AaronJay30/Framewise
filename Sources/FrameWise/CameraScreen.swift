@@ -41,6 +41,12 @@ struct CameraScreen: View {
         .onChange(of: viewModel.lastCapturedPhoto?.id) { _, _ in
             storeLatestCapture()
         }
+        .onAppear {
+            viewModel.start()
+        }
+        .onDisappear {
+            viewModel.stop()
+        }
     }
 
     @ViewBuilder
