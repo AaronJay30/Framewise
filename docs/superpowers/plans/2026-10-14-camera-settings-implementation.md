@@ -141,6 +141,10 @@ func cameraService(_ cameraService: CameraService,
                    settings: CameraSettings)
 func cameraService(_ cameraService: CameraService,
                    didUpdateExposureRange range: CameraExposureRange)
+func cameraService(_ cameraService: CameraService,
+                   didUpdateZoomRange range: ClosedRange<Float>)
+func cameraService(_ cameraService: CameraService,
+                   didUpdateFlashAvailability isAvailable: Bool)
 ```
 
 `CameraService` exposes:
@@ -269,7 +273,8 @@ processed bytes on success and the input bytes on decode/encode failure.
 - Produces the delegate and service methods in the Interfaces section.
 - `CameraViewModel.settings` loads from `UserDefaults` key
   `com.framewise.camera.settings`, normalizes decoded values, and publishes
-  changes.
+  changes. It also publishes the active exposure/zoom ranges and flash
+  availability for the settings surface.
 - `CameraViewModel.updateSettings(_:)` saves the normalized value and calls
   `service.apply(settings:)`.
 - `CameraViewModel.resetSettings()` restores `CameraSettings.defaults`.

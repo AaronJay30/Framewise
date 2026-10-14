@@ -10,13 +10,15 @@ reference-photo alignment, and on-device AI guidance.
 > camera permission recovery, live preview shell, still capture service,
 > capture-to-library flight animation, Library/Preview navigation, native Share,
 > add-only Save-to-Photos export, FrameWise-only Delete, and a disabled Edit
-> placeholder.
+> placeholder. The camera also has a compact settings sheet for Flash, Timer,
+> Exposure, Tap Focus, Aspect, Zoom, and app-defined Photographic Styles.
 
 ## Product and design documents
 
 - [Product design](docs/superpowers/specs/2026-10-12-ai-composition-camera-design.md)
 - [Layout and visual design](docs/superpowers/specs/2026-10-12-framewise-layout-design.md)
 - [Camera foundation design](docs/superpowers/specs/2026-10-13-camera-foundation-design.md)
+- [Camera settings design](docs/superpowers/specs/2026-10-14-camera-settings-design.md)
 - [Code walkthrough](docs/code-walkthrough.md)
 
 ## Verified setup
@@ -31,9 +33,10 @@ Verified on 2026-10-12 from Ubuntu running under WSL2:
 - Physical iPhone detected by `idevice_id` and `xtool devices --usb`.
 - Starter SwiftUI app built successfully with `xtool dev`.
 - The current camera foundation builds successfully with `xtool dev build`.
-- Physical-device camera verification is the next validation step for this
-  slice; personal Apple account details and the device UDID are not stored in
-  this repository.
+- The camera settings slice builds successfully with `xtool dev build`.
+- Physical-device verification of camera settings is the next validation step;
+  personal Apple account details and the device UDID are not stored in this
+  repository.
 
 Personal Apple account details and the device UDID are intentionally not
 stored in this repository.
@@ -53,6 +56,8 @@ FrameWise/
 │   │   ├── CameraService.swift
 │   │   ├── CameraViewModel.swift
 │   │   ├── CapturedPhotoStore.swift
+│   │   ├── CameraPhotoProcessor.swift
+│   │   ├── CameraSettingsSheet.swift
 │   │   ├── CameraPreview.swift
 │   │   ├── CameraScreen.swift
 │   │   ├── LibraryView.swift
@@ -62,6 +67,8 @@ FrameWise/
 │   └── FrameWiseCore/
 │       ├── CameraState.swift
 │       ├── CameraStateReducer.swift
+│       ├── CameraSettings.swift
+│       ├── CameraPhotoProcessingPolicy.swift
 │       ├── BrandingTokens.swift
 │       ├── CapturedPhoto.swift
 │       ├── CapturedPhotoLibrary.swift
@@ -69,6 +76,8 @@ FrameWise/
 ├── Tests/FrameWiseCoreTests/
 │   ├── CameraStateReducerTests.swift
 │   ├── BrandingTokenTests.swift
+│   ├── CameraSettingsTests.swift
+│   ├── CameraPhotoProcessingPolicyTests.swift
 │   ├── CapturedPhotoLibraryTests.swift
 │   └── CapturedPhotoDiskStoreTests.swift
 ├── Resources/
@@ -81,14 +90,31 @@ FrameWise/
     └── superpowers/specs/
 ```
 
-The core state target is hardware-independent so the reducer and persistent
-photo tests run on the host. `CapturedPhotoDiskStore` writes one image file per
-capture plus an atomic manifest under the app's private Application Support
-directory. `CapturedPhotoStore` loads that library again on relaunch and only
-publishes a new item after the private write succeeds. The camera target is the
-iOS-facing layer; its AVFoundation work stays in `CameraService`, while SwiftUI
-reads state through `CameraViewModel` and shares one photo store across Camera,
+The core state target is hardware-independent so settings invariants, the
+reducer, and persistent photo tests run on the host. `CameraSettings` owns
+defaults, Codable persistence values, device-independent crop geometry, and
+style parameters. `CapturedPhotoDiskStore` writes one image file per capture
+plus an atomic manifest under the app's private Application Support directory.
+`CapturedPhotoStore` loads that library again on relaunch and only publishes a
+new item after the private write succeeds. The camera target is the iOS-facing
+layer; its AVFoundation work stays in `CameraService`, while SwiftUI reads
+state through `CameraViewModel` and shares one photo store across Camera,
 Library, and Preview.
+
+## Camera settings flow
+
+The Camera screen keeps the Library/Shutter/Flip dock and adds one Controls
+entry point above it. The sheet uses a horizontally scrollable row for Flash,
+Timer, Aspect, and Zoom, a full-width Exposure slider, and a separate style
+row. Tap Focus remains a direct preview gesture; pinch updates the device-
+bounded zoom range. Settings are restored from local `UserDefaults` and the
+capture service receives an immutable snapshot for each photo.
+
+The service applies exposure, focus, and zoom on its serial session queue.
+Aspect and app-defined style choices are applied at the capture-to-library
+boundary by `CameraPhotoProcessor`; `CameraPhotoProcessingPolicy` returns the
+original capture bytes whenever decoding, filtering, cropping, or encoding
+cannot complete.
 
 ## Captured photo flow
 

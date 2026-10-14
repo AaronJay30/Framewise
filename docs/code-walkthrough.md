@@ -13,11 +13,45 @@ can be read from the outside in.
    inside a `NavigationStack`; it does not configure AVFoundation directly.
 3. `Sources/FrameWise/CameraViewModel.swift` is the bridge between service
    callbacks and SwiftUI. Its published `CameraState` is what the views render,
-   and each valid capture becomes a UUID-backed `CapturedPhoto` in a pending
-   delivery queue until private storage accepts it.
+   while it also restores settings, owns the timer/focus lifecycles, and turns
+   each valid capture into a UUID-backed `CapturedPhoto` in a pending delivery
+   queue until private storage accepts it.
 4. `Sources/FrameWise/CameraService.swift` owns the AVFoundation session,
-   camera selection, permissions, and photo capture. It keeps session work on
-   its own queue so the UI stays responsive.
+   camera selection, permissions, settings application, and photo capture. It
+   keeps session work on its own queue so the UI stays responsive.
+
+## Camera settings and capture flow
+
+`Sources/FrameWiseCore/CameraSettings.swift` is the hardware-independent
+contract for Flash, Timer, Exposure, Tap Focus, Aspect, Zoom, and the five
+app-defined Photographic Styles. It provides safe defaults, Codable values for
+local persistence, normalized focus points, centered crop geometry, and pure
+style adjustments. `CameraSettingsTests` covers the choices, invariants,
+Codable round trip, and capture snapshot behavior on the host.
+
+`CameraScreen` presents one `CameraSettingsSheet` above the existing
+Library/Shutter/Flip dock. Flash, Timer, Aspect, and Zoom stay in one
+horizontal control row; Exposure gets the full-width slider; styles are a
+separate horizontal row. Tap Focus is direct manipulation on `CameraPreview`,
+and the screen shows a short-lived reticle, timer countdown, aspect framing
+mask, style treatment, and pinch-to-zoom feedback without adding a second
+permanent toolbar.
+
+`CameraService` applies device-dependent exposure, zoom, flash, and focus on
+its serial session queue. A capture stores its immutable `CameraSettings`
+snapshot by photo request ID before it enters the existing callback boundary,
+so a later settings change cannot alter that photo's processing choice. The
+active camera publishes exposure and zoom ranges plus flash availability after
+configuration and flips.
+
+`Sources/FrameWise/CameraPhotoProcessor.swift` normalizes the captured image,
+applies centered aspect cropping and the selected style, then encodes the
+result for the existing library flow. `CameraPhotoProcessingPolicy` is the
+small pure fallback contract: if processing cannot decode, filter, crop, or
+encode, the original capture bytes continue through storage. Processing is
+serialized for capture order but runs off the main actor. Its invalid-data test
+runs in the host suite; UIKit/Core Image execution is compile-checked by
+`xtool dev build`.
 
 ## Persistent captured-photo flow
 
@@ -123,7 +157,18 @@ swift test
 xtool dev build
 ```
 
-The host suite covers camera/branding state, captured-photo ordering and
-export/deletion state, disk restore ordering, manifest corruption, missing
-images, and app-private removal. `xtool dev build` covers the SwiftUI,
-AVFoundation, UIKit, and PhotoKit adapters that cannot run on the host.
+The host suite covers camera/branding state, camera settings contracts and
+processing fallback, captured-photo ordering and export/deletion state, disk
+restore ordering, manifest corruption, missing images, and app-private
+removal. `xtool dev build` covers the SwiftUI, AVFoundation, UIKit, Core Image,
+and PhotoKit adapters that cannot run on the host. Physical-device checks are
+still required for hardware support, timer cancellation on disappearance,
+focus/exposure response, flash behavior, and accessibility across device
+sizes. The remaining manual acceptance map is `[AC-CAMSET1014-F1]` and
+`[AC-CAMSET1014-F9]` for the sheet layout and touch targets,
+`[AC-CAMSET1014-F4]`/`[AC-CAMSET1014-F5]`/`[AC-CAMSET1014-F7]` for live
+exposure, focus, and pinch zoom, `[AC-CAMSET1014-E1]` for unsupported device
+capabilities, `[AC-CAMSET1014-E2]` for timer cancellation, and
+`[AC-CAMSET1014-S1]` for the existing permission and app-private storage
+boundaries. `[AC-CAMSET1014-E3]` has a host fallback-policy test and still
+needs one valid-image/failure-path device check.
