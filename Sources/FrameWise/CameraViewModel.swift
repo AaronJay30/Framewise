@@ -15,6 +15,7 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
     @Published private(set) var settings: CameraSettings
     @Published private(set) var exposureRange: CameraExposureRange = .defaults
     @Published private(set) var zoomRange: ClosedRange<Float> = 1...10
+    @Published private(set) var flashAvailable = true
     @Published private(set) var focusPoint: CGPoint?
     @Published private(set) var countdown: Int?
 
@@ -23,6 +24,7 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
     private let service: CameraService
     private var pendingCaptureTask: Task<Void, Never>?
     private var focusIndicatorTask: Task<Void, Never>?
+    private var photoProcessingTask: Task<Void, Never>?
 
     private static let settingsKey = "com.framewise.camera.settings"
 
@@ -40,6 +42,7 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
     deinit {
         pendingCaptureTask?.cancel()
         focusIndicatorTask?.cancel()
+        photoProcessingTask?.cancel()
     }
 
     /// Starts camera authorization and session setup.
@@ -68,6 +71,7 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
     }
 
     /// Requests a still photo from the running session.
+    // [AC-CAMSET1014-F3] [AC-CAMSET1014-E2]
     func capturePhoto() {
         guard pendingCaptureTask == nil else { return }
 
@@ -173,14 +177,29 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
         didCapturePhoto data: Data,
         settings: CameraSettings
     ) {
-        let processedData = CameraPhotoProcessor.process(
-            data: data,
-            settings: settings
-        )
+        // [AC-CAMSET1014-E3] Keep image work off the main actor.
+        // Keep the delivery order stable while processing each image off-main.
+        let previousProcessingTask = photoProcessingTask
+        photoProcessingTask = Task { @MainActor [weak self] in
+            if let previousProcessingTask {
+                await previousProcessingTask.value
+            }
+
+            guard !Task.isCancelled else { return }
+            let processedData = await Task.detached(priority: .userInitiated) {
+                CameraPhotoProcessor.process(data: data, settings: settings)
+            }.value
+
+            guard let self, !Task.isCancelled else { return }
+            self.appendCapturedPhoto(data: processedData)
+        }
+    }
+
+    private func appendCapturedPhoto(data: Data) {
 
         guard let photo = CapturedPhoto(
             id: UUID(),
-            data: processedData,
+            data: data,
             capturedAt: Date(),
             isExported: false
         ) else {
@@ -223,6 +242,13 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
             settings = adjusted
             saveSettings(adjusted)
         }
+    }
+
+    func cameraService(
+        _ cameraService: CameraService,
+        didUpdateFlashAvailability isAvailable: Bool
+    ) {
+        flashAvailable = isAvailable
     }
 
     private func clearPendingCapture() {

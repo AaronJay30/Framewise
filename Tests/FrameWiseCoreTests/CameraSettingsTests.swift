@@ -23,6 +23,10 @@ final class CameraSettingsTests: XCTestCase {
         XCTAssertEqual(CameraTimerDuration.threeSeconds.seconds, 3)
         XCTAssertEqual(CameraTimerDuration.fiveSeconds.seconds, 5)
         XCTAssertEqual(CameraTimerDuration.tenSeconds.seconds, 10)
+        XCTAssertEqual(CameraTimerDuration.off.title, "Off")
+        XCTAssertEqual(CameraTimerDuration.threeSeconds.title, "3s")
+        XCTAssertEqual(CameraTimerDuration.fiveSeconds.title, "5s")
+        XCTAssertEqual(CameraTimerDuration.tenSeconds.title, "10s")
     }
 
     // [AC-CAMSET1014-F6]

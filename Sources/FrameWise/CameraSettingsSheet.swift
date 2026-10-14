@@ -3,10 +3,12 @@ import Foundation
 import FrameWiseCore
 import SwiftUI
 
+// [AC-CAMSET1014-F1] [AC-CAMSET1014-F9]
 struct CameraSettingsSheet: View {
     let settings: CameraSettings
     let exposureRange: CameraExposureRange
     let zoomRange: ClosedRange<Float>
+    let flashAvailable: Bool
     let onChange: (CameraSettings) -> Void
     let onReset: () -> Void
 
@@ -18,12 +20,14 @@ struct CameraSettingsSheet: View {
         settings: CameraSettings,
         exposureRange: CameraExposureRange,
         zoomRange: ClosedRange<Float>,
+        flashAvailable: Bool,
         onChange: @escaping (CameraSettings) -> Void,
         onReset: @escaping () -> Void
     ) {
         self.settings = settings
         self.exposureRange = exposureRange
         self.zoomRange = zoomRange
+        self.flashAvailable = flashAvailable
         self.onChange = onChange
         self.onReset = onReset
         _draft = State(initialValue: settings)
@@ -77,7 +81,7 @@ struct CameraSettingsSheet: View {
     private var quickControls: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
-                flashMenu
+                flashControl
                 timerMenu
                 aspectMenu
                 zoomMenu
@@ -105,6 +109,22 @@ struct CameraSettingsSheet: View {
             )
         }
         .accessibilityLabel("Flash, \(draft.flashMode.title)")
+    }
+
+    @ViewBuilder
+    private var flashControl: some View {
+        if flashAvailable {
+            flashMenu
+        } else {
+            controlLabel(
+                symbol: "bolt.slash.fill",
+                title: "Flash",
+                value: "Unavailable"
+            )
+            .opacity(0.56)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Flash unavailable on this camera")
+        }
     }
 
     private var timerMenu: some View {
@@ -228,11 +248,19 @@ struct CameraSettingsSheet: View {
             Text(title)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+                .lineLimit(2)
             Text(value)
                 .font(.caption.weight(.semibold))
-                .lineLimit(1)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
         }
-        .frame(width: 78, height: 56, alignment: .leading)
+        .frame(
+            minWidth: 78,
+            idealWidth: 78,
+            maxWidth: 78,
+            minHeight: 56,
+            alignment: .leading
+        )
         .padding(.horizontal, 10)
         .background(FrameWiseBrand.ink.opacity(colorScheme == .dark ? 0.9 : 0.08))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -268,9 +296,15 @@ struct CameraSettingsSheet: View {
                     }
                 Text(style.title)
                     .font(.caption.weight(isSelected ? .semibold : .regular))
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
             }
-            .frame(width: 76, height: 68)
+                    .frame(
+                        minWidth: 76,
+                        idealWidth: 76,
+                        maxWidth: 76,
+                        minHeight: 68
+                    )
             .foregroundStyle(FrameWiseBrand.foreground(for: colorScheme))
             .background(
                 isSelected

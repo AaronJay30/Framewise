@@ -20,6 +20,10 @@ protocol CameraServiceDelegate: AnyObject {
         _ cameraService: CameraService,
         didUpdateZoomRange range: ClosedRange<Float>
     )
+    func cameraService(
+        _ cameraService: CameraService,
+        didUpdateFlashAvailability isAvailable: Bool
+    )
 }
 
 /// Owns the AVFoundation session and keeps session work off the UI thread.
@@ -64,6 +68,7 @@ final class CameraService: NSObject, @unchecked Sendable, AVCapturePhotoCaptureD
     }
 
     /// Applies the latest user-selected values on the session queue.
+    // [AC-CAMSET1014-F4] [AC-CAMSET1014-F7]
     func apply(settings: CameraSettings) {
         sessionQueue.async { [weak self] in
             guard let self else { return }
@@ -75,6 +80,7 @@ final class CameraService: NSObject, @unchecked Sendable, AVCapturePhotoCaptureD
     }
 
     /// Focuses and meters at a normalized point from the preview layer.
+    // [AC-CAMSET1014-F5] [AC-CAMSET1014-E1]
     func focus(at point: CameraFocusPoint) {
         sessionQueue.async { [weak self] in
             self?.focusOnQueue(at: point)
@@ -82,6 +88,7 @@ final class CameraService: NSObject, @unchecked Sendable, AVCapturePhotoCaptureD
     }
 
     /// Requests one still photo from the configured photo output.
+    // [AC-CAMSET1014-F2] [AC-CAMSET1014-E1]
     func capturePhoto(using settings: CameraSettings) {
         sessionQueue.async { [weak self] in
             guard let self, self.isConfigured, self.session.isRunning else {
@@ -229,17 +236,25 @@ final class CameraService: NSObject, @unchecked Sendable, AVCapturePhotoCaptureD
         guard (try? device.lockForConfiguration()) != nil else {
             emitExposureRange(exposureRange)
             emitZoomRange(zoomRange)
+            emitFlashAvailability(for: device)
             return
         }
 
-        if device.isExposureModeSupported(.continuousAutoExposure) {
-            device.exposureMode = .continuousAutoExposure
+        let supportsExposureBias = device.isExposureModeSupported(.continuousAutoExposure) ||
+            device.isExposureModeSupported(.autoExpose)
+        if supportsExposureBias {
+            if device.isExposureModeSupported(.continuousAutoExposure) {
+                device.exposureMode = .continuousAutoExposure
+            } else {
+                device.exposureMode = .autoExpose
+            }
+            device.setExposureTargetBias(currentSettings.exposureBias)
         }
-        device.setExposureTargetBias(currentSettings.exposureBias)
         device.videoZoomFactor = CGFloat(currentSettings.zoomFactor)
         device.unlockForConfiguration()
         emitExposureRange(exposureRange)
         emitZoomRange(zoomRange)
+        emitFlashAvailability(for: device)
     }
 
     private func focusOnQueue(at point: CameraFocusPoint) {
@@ -308,6 +323,17 @@ final class CameraService: NSObject, @unchecked Sendable, AVCapturePhotoCaptureD
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.delegate?.cameraService(self, didUpdateZoomRange: range)
+        }
+    }
+
+    private func emitFlashAvailability(for device: AVCaptureDevice) {
+        let isAvailable = device.hasFlash && !photoOutput.supportedFlashModes.isEmpty
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.delegate?.cameraService(
+                self,
+                didUpdateFlashAvailability: isAvailable
+            )
         }
     }
 

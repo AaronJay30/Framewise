@@ -28,7 +28,7 @@ public enum CameraTimerDuration: Int, CaseIterable, Codable, Sendable {
     }
 
     public var title: String {
-        rawValue == 0 ? "Off" : "(rawValue)s"
+        rawValue == 0 ? "Off" : "\(rawValue)s"
     }
 }
 

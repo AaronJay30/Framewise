@@ -8,6 +8,7 @@ enum CameraPhotoProcessor {
     private static let context = CIContext()
 
     static func process(data: Data, settings: CameraSettings) -> Data {
+        // [AC-CAMSET1014-E3]
         guard let image = UIImage(data: data),
               let normalizedImage = normalizedImage(image),
               let input = CIImage(image: normalizedImage) else {

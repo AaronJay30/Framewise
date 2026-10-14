@@ -70,6 +70,7 @@ struct CameraScreen: View {
                 settings: viewModel.settings,
                 exposureRange: viewModel.exposureRange,
                 zoomRange: viewModel.zoomRange,
+                flashAvailable: viewModel.flashAvailable,
                 onChange: viewModel.updateSettings,
                 onReset: viewModel.resetSettings
             )
@@ -106,6 +107,7 @@ struct CameraScreen: View {
     }
 
     private var preview: some View {
+        // [AC-CAMSET1014-F5] [AC-CAMSET1014-F6] [AC-CAMSET1014-F7]
         ZStack {
             styledPreview
 

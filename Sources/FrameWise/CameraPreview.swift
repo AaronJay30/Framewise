@@ -58,6 +58,7 @@ final class PreviewView: UIView {
     }
 
     @objc private func handleTap(_ recognizer: UITapGestureRecognizer) {
+        // [AC-CAMSET1014-F5]
         let previewPoint = recognizer.location(in: self)
         let devicePoint = videoPreviewLayer.captureDevicePointConverted(
             fromLayerPoint: previewPoint
