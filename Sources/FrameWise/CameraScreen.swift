@@ -282,8 +282,8 @@ struct CameraScreen: View {
                     .font(.system(size: 19, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 44, height: 44)
-                    .modifier(CameraGlass())
             }
+            .buttonStyle(.plain)
             .accessibilityLabel("Flip camera")
             .accessibilityHint("Switches between the rear and front cameras.")
         }

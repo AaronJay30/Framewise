@@ -63,7 +63,7 @@ struct CameraTopControls: View {
             }
             .accessibilityHint("Cycles Off, 3, 5, and 10 seconds.")
 
-            control("Aspect", symbol: nil, value: settings.aspectRatio.title,
+            control("Aspect", symbol: "rectangle", value: settings.aspectRatio.title,
                     active: settings.aspectRatio != .fourByThree) {
                 var next = settings
                 next.aspectRatio = settings.aspectRatio.next
@@ -76,60 +76,29 @@ struct CameraTopControls: View {
                 .accessibilityValue(settings.photographicStyle.title)
 
             control("Composition", symbol: "square.grid.3x3", value: nil,
-                    active: settings.compositionGuide != .off, action: onComposition,
-                    usesGlass: false)
+                    active: settings.compositionGuide != .off, action: onComposition)
                 .accessibilityValue(settings.compositionGuide.title)
 
             control("Resolution", symbol: "camera.aperture", value: nil,
-                    active: settings.photoResolution != .standard, action: onResolution,
-                    usesGlass: false)
+                    active: settings.photoResolution != .standard, action: onResolution)
                 .accessibilityValue(resolutionAccessibilityValue)
         }
         .fixedSize(horizontal: true, vertical: false)
     }
 
     private func control(
-        _ title: String, symbol: String?, value: String?, active: Bool,
-        action: @escaping () -> Void, usesGlass: Bool = true
+        _ title: String, symbol: String, value: String?, active: Bool,
+        action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            controlSurface(
-                symbol: symbol,
-                value: value,
-                active: active,
-                usesGlass: usesGlass
-            )
+            Image(systemName: symbol)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(active ? FrameWiseBrand.signalCoral : .white)
+                .frame(width: 44, height: 44)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
         .accessibilityValue(value ?? "")
-    }
-
-    @ViewBuilder
-    private func controlSurface(
-        symbol: String?, value: String?, active: Bool, usesGlass: Bool
-    ) -> some View {
-        if usesGlass {
-            controlContent(symbol: symbol, value: value, active: active)
-                .modifier(CameraGlass())
-                .contentShape(Capsule())
-        } else {
-            controlContent(symbol: symbol, value: value, active: active)
-                .contentShape(Rectangle())
-        }
-    }
-
-    private func controlContent(
-        symbol: String?, value: String?, active: Bool
-    ) -> some View {
-        HStack(spacing: 5) {
-            if let symbol { Image(systemName: symbol) }
-            if let value { Text(value).monospacedDigit() }
-        }
-        .font(.subheadline.weight(.semibold))
-        .foregroundStyle(active ? FrameWiseBrand.signalCoral : .white)
-        .padding(.horizontal, value == nil ? 0 : 12)
-        .frame(minWidth: 44, minHeight: 44)
     }
 
     private var resolutionAccessibilityValue: String {
