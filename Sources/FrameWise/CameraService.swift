@@ -24,6 +24,10 @@ protocol CameraServiceDelegate: AnyObject {
         _ cameraService: CameraService,
         didUpdateFlashAvailability isAvailable: Bool
     )
+    func cameraService(
+        _ cameraService: CameraService,
+        didUpdatePhotoResolution capability: CameraPhotoResolutionCapability
+    )
     func cameraService(_ cameraService: CameraService, didChangeDeviceID deviceID: String)
 }
 
@@ -45,6 +49,8 @@ final class CameraService: NSObject, @unchecked Sendable, AVCapturePhotoCaptureD
     private var currentPosition: AVCaptureDevice.Position = .back
     private var currentSettings = CameraSettings.defaults
     private var appliedSettings: CameraSettings?
+    private var photoResolutionCapability: CameraPhotoResolutionCapability?
+    private var photoDimensionsByPixelCount: [Int64: CMVideoDimensions] = [:]
     private var pinchNativeStart: Float = 1
     private var captureSettingsByID: [Int64: CameraSettings] = [:]
     private var isConfigured = false
@@ -132,6 +138,11 @@ final class CameraService: NSObject, @unchecked Sendable, AVCapturePhotoCaptureD
             self.applySettingsOnQueue(force: true)
 
             let photoSettings = AVCapturePhotoSettings()
+            if let maxPhotoDimensions = self.photoDimensionsOnQueue(
+                for: captureSettings.photoResolution
+            ) {
+                photoSettings.maxPhotoDimensions = maxPhotoDimensions
+            }
             if let angle = self.rotationCoordinator?.videoRotationAngleForHorizonLevelCapture,
                let connection = self.photoOutput.connection(with: .video),
                connection.isVideoRotationAngleSupported(angle) {
@@ -204,6 +215,7 @@ final class CameraService: NSObject, @unchecked Sendable, AVCapturePhotoCaptureD
         videoInput = input
         appliedSettings = nil
         updateRotationCoordinator(for: input.device)
+        updatePhotoResolutionOnQueue(for: input.device)
         isConfigured = true
         emit(.sessionConfigured)
         applySettingsOnQueue()
@@ -238,6 +250,7 @@ final class CameraService: NSObject, @unchecked Sendable, AVCapturePhotoCaptureD
         appliedSettings = nil
         updateRotationCoordinator(for: newInput.device)
         currentPosition = nextPosition
+        updatePhotoResolutionOnQueue(for: newInput.device)
         applySettingsOnQueue()
         emitCapabilities(for: newInput.device)
     }
@@ -319,6 +332,40 @@ final class CameraService: NSObject, @unchecked Sendable, AVCapturePhotoCaptureD
         emitExposureRange(exposureRange(for: device))
         emitZoomRange(zoomRange(for: device))
         emitFlashAvailability(for: device)
+        emitPhotoResolutionCapability()
+    }
+
+    private func updatePhotoResolutionOnQueue(for device: AVCaptureDevice) {
+        var dimensionsByPixelCount: [Int64: CMVideoDimensions] = [:]
+        let supportedDimensions = device.activeFormat.supportedMaxPhotoDimensions.map { dimensions in
+            let coreDimensions = CameraPhotoDimensions(
+                width: Int(dimensions.width),
+                height: Int(dimensions.height)
+            )
+            dimensionsByPixelCount[coreDimensions.pixelCount] = dimensions
+            return coreDimensions
+        }
+
+        let capability = CameraPhotoResolutionCapability(
+            supportedDimensions: supportedDimensions
+        )
+        photoDimensionsByPixelCount = dimensionsByPixelCount
+        photoResolutionCapability = capability
+
+        if let maximum = capability.maximum ?? capability.standard,
+           let maxPhotoDimensions = dimensionsByPixelCount[maximum.pixelCount] {
+            photoOutput.maxPhotoDimensions = maxPhotoDimensions
+        }
+    }
+
+    private func photoDimensionsOnQueue(
+        for resolution: CameraPhotoResolution
+    ) -> CMVideoDimensions? {
+        let dimension = resolution == .maximum
+            ? photoResolutionCapability?.maximum ?? photoResolutionCapability?.standard
+            : photoResolutionCapability?.standard
+        guard let dimension else { return nil }
+        return photoDimensionsByPixelCount[dimension.pixelCount]
     }
 
     private func focusOnQueue(at point: CameraFocusPoint, lockFocus: Bool) {
@@ -414,6 +461,17 @@ final class CameraService: NSObject, @unchecked Sendable, AVCapturePhotoCaptureD
             self.delegate?.cameraService(
                 self,
                 didUpdateFlashAvailability: isAvailable
+            )
+        }
+    }
+
+    private func emitPhotoResolutionCapability() {
+        guard let capability = photoResolutionCapability else { return }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.delegate?.cameraService(
+                self,
+                didUpdatePhotoResolution: capability
             )
         }
     }

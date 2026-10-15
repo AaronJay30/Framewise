@@ -20,6 +20,7 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
     @Published private(set) var isFocusLocked = false
     @Published private(set) var countdown: Int?
     @Published private(set) var activeDeviceID: String?
+    @Published private(set) var photoResolutionCapability: CameraPhotoResolutionCapability?
 
     let session: AVCaptureSession
 
@@ -329,6 +330,15 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
         didUpdateFlashAvailability isAvailable: Bool
     ) {
         if flashAvailable != isAvailable { flashAvailable = isAvailable }
+    }
+
+    func cameraService(
+        _ cameraService: CameraService,
+        didUpdatePhotoResolution capability: CameraPhotoResolutionCapability
+    ) {
+        if photoResolutionCapability != capability {
+            photoResolutionCapability = capability
+        }
     }
 
     private func clearPendingCapture() {

@@ -41,6 +41,29 @@ final class CameraPhotoResolutionTests: XCTestCase {
         XCTAssertEqual(capability.maximumTitle, "Maximum (49 MP)")
     }
 
+    // [AC-CAMLIB1015-F7]
+    func testAC_CAMLIB1015_F7_StandardAndMaximumUseTheSupportedExtremes() {
+        let small = CameraPhotoDimensions(width: 1920, height: 1080)
+        let large = CameraPhotoDimensions(width: 7680, height: 4320)
+        let capability = CameraPhotoResolutionCapability(
+            supportedDimensions: [large, small]
+        )
+
+        XCTAssertEqual(capability.standard, small)
+        XCTAssertEqual(capability.maximum, large)
+    }
+
+    // [AC-CAMLIB1015-F7]
+    func testAC_CAMLIB1015_F7_MaximumIsUnavailableWithoutDistinctDimensions() {
+        let supported = CameraPhotoDimensions(width: 4032, height: 3024)
+        let capability = CameraPhotoResolutionCapability(
+            supportedDimensions: [supported, supported]
+        )
+
+        XCTAssertFalse(capability.supportsMaximum)
+        XCTAssertNil(capability.maximum)
+    }
+
     // [AC-CAMLIB1015-E1]
     func testAC_CAMLIB1015_E1_LegacySettingsDecodeToStandardResolution() throws {
         let data = #"{"flashMode":"off","timerDuration":0,"exposureBias":0,"aspectRatio":"fourByThree","zoomFactor":1,"photographicStyle":"standard"}"#.data(using: .utf8)!
