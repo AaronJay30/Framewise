@@ -114,6 +114,7 @@ struct CompositionGuideArtwork: View {
             stroke(horizontalLine(at: first))
             stroke(horizontalLine(at: second))
         case .goldenSpiral:
+            stroke(goldenRectanglePath(in: CGRect(origin: .zero, size: size)), opacity: 0.55)
             stroke(goldenSpiralPath(in: CGRect(origin: .zero, size: size)))
         case .goldenTriangle:
             let start = CGPoint.zero
@@ -190,6 +191,24 @@ struct CompositionGuideArtwork: View {
             )
         }
         return path
+    }
+
+    private func goldenRectanglePath(in bounds: CGRect) -> Path {
+        guard let rectangle = CameraGoldenSpiralGeometry.goldenRectangle(
+            width: Double(bounds.width),
+            height: Double(bounds.height)
+        ) else {
+            return Path()
+        }
+
+        return Path(
+            CGRect(
+                x: bounds.minX + rectangle.x,
+                y: bounds.minY + rectangle.y,
+                width: rectangle.width,
+                height: rectangle.height
+            )
+        )
     }
 }
 #endif

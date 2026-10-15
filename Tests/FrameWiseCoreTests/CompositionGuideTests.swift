@@ -117,24 +117,30 @@ final class CompositionGuideTests: XCTestCase {
     }
 
     // [AC-CAMLIB1015-F2]
-    func testAC_CAMLIB1015_F2_GoldenSpiralRunsFromLowerRightToUpperLeft() {
+    func testAC_CAMLIB1015_F2_GoldenSpiralRemainsNormalizedAndContinuous() {
         let points = CameraGoldenSpiralGeometry.points(sampleCount: 160)
-        let inner = try! XCTUnwrap(points.first)
-        let outer = try! XCTUnwrap(points.last)
+        XCTAssertTrue(points.allSatisfy { (0...1).contains($0.x) && (0...1).contains($0.y) })
 
-        XCTAssertGreaterThan(inner.x, 0.5)
-        XCTAssertGreaterThan(inner.y, 0.5)
-        XCTAssertLessThan(outer.x, 0.5)
-        XCTAssertLessThan(outer.y, 0.5)
+        for pair in zip(points, points.dropFirst()) {
+            XCTAssertLessThan(
+                hypot(pair.0.x - pair.1.x, pair.0.y - pair.1.y),
+                0.20
+            )
+        }
     }
 
     // [AC-CAMUX1015-F4]
     func testAC_CAMUX1015_F4_SizeAwareSpiralPreservesItsAspect() {
-        let points = CameraGoldenSpiralGeometry.points(width: 390, height: 844)
-        let xSpan = (points.map(\.x).max() ?? 0) - (points.map(\.x).min() ?? 0)
-        let ySpan = (points.map(\.y).max() ?? 0) - (points.map(\.y).min() ?? 0)
+        let rectangle = try! XCTUnwrap(
+            CameraGoldenSpiralGeometry.goldenRectangle(width: 390, height: 844)
+        )
+        XCTAssertEqual(
+            max(rectangle.width, rectangle.height) / min(rectangle.width, rectangle.height),
+            CameraGoldenSpiralGeometry.phi,
+            accuracy: 0.02
+        )
 
-        XCTAssertEqual(xSpan / ySpan, 844.0 / 390.0, accuracy: 0.02)
+        let points = CameraGoldenSpiralGeometry.points(width: 390, height: 844)
         XCTAssertTrue(points.allSatisfy { (0...1).contains($0.x) && (0...1).contains($0.y) })
     }
 
@@ -142,6 +148,48 @@ final class CompositionGuideTests: XCTestCase {
     func testAC_CAMUX1015_E3_SizeAwareSpiralRejectsInvalidInputs() {
         XCTAssertTrue(CameraGoldenSpiralGeometry.points(width: .nan, height: 844).isEmpty)
         XCTAssertTrue(CameraGoldenSpiralGeometry.points(width: 390, height: 0).isEmpty)
+        XCTAssertTrue(CameraGoldenSpiralGeometry.points(width: 390, height: 844, sampleCount: 0).isEmpty)
+    }
+
+    // [AC-GOLDSPIRAL1015-F1]
+    func testAC_GOLDSPIRAL1015_F1_UsesAConstructionBasedGoldenRectangle() throws {
+        let width = 390.0
+        let height = 844.0
+        let rectangle = try XCTUnwrap(
+            CameraGoldenSpiralGeometry.goldenRectangle(width: width, height: height)
+        )
+        let phi = (1 + sqrt(5.0)) / 2
+
+        XCTAssertEqual(
+            max(rectangle.width, rectangle.height) / min(rectangle.width, rectangle.height),
+            phi,
+            accuracy: 0.000001
+        )
+        XCTAssertGreaterThanOrEqual(rectangle.x, 0)
+        XCTAssertGreaterThanOrEqual(rectangle.y, 0)
+        XCTAssertLessThanOrEqual(rectangle.x + rectangle.width, width)
+        XCTAssertLessThanOrEqual(rectangle.y + rectangle.height, height)
+
+        let points = CameraGoldenSpiralGeometry.points(
+            width: width,
+            height: height,
+            sampleCount: 160
+        )
+        XCTAssertEqual(points.count, 160)
+        XCTAssertTrue(points.allSatisfy { point in
+            let x = point.x * width
+            let y = point.y * height
+            return x >= rectangle.x - 0.000001
+                && x <= rectangle.x + rectangle.width + 0.000001
+                && y >= rectangle.y - 0.000001
+                && y <= rectangle.y + rectangle.height + 0.000001
+        })
+    }
+
+    // [AC-GOLDSPIRAL1015-E1]
+    func testAC_GOLDSPIRAL1015_E1_RejectsInvalidRectangleInputs() {
+        XCTAssertNil(CameraGoldenSpiralGeometry.goldenRectangle(width: .nan, height: 844))
+        XCTAssertNil(CameraGoldenSpiralGeometry.goldenRectangle(width: 390, height: .infinity))
         XCTAssertTrue(CameraGoldenSpiralGeometry.points(width: 390, height: 844, sampleCount: 0).isEmpty)
     }
 }

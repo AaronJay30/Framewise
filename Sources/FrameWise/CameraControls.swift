@@ -91,10 +91,19 @@ struct CameraTopControls: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            Image(systemName: symbol)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(active ? FrameWiseBrand.signalCoral : .white)
-                .frame(width: 44, height: 44)
+            HStack(spacing: 4) {
+                Image(systemName: symbol)
+                    .font(.subheadline.weight(.semibold))
+
+                if let value, !value.isEmpty {
+                    Text(value)
+                        .font(.caption2.weight(.semibold).monospacedDigit())
+                        .lineLimit(1)
+                }
+            }
+            .foregroundStyle(active ? FrameWiseBrand.signalCoral : .white)
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)

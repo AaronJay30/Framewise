@@ -168,8 +168,8 @@ accessibility, and saved-image confirmation.
 ## Camera resolution and library-preview traceability
 
 - `[AC-CAMLIB1015-F1]` and `[AC-CAMLIB1015-F2]`: the pure geometry provider
-  supplies a continuous, normalized lower-right-to-upper-left Golden Spiral;
-  the Canvas maps it into the live and miniature preview bounds.
+  supplies a continuous, normalized construction-based Golden Spiral; the
+  Canvas maps it into the live and miniature preview bounds.
 - `[AC-CAMLIB1015-F3]` and `[AC-CAMLIB1015-F4]`: Composition is an icon-only,
   backgroundless top control, and guide/library camera surfaces have no
   decorative shadow.
@@ -179,7 +179,8 @@ accessibility, and saved-image confirmation.
   `CameraSettings`, `CameraPhotoResolution`, `CameraService`, and the host
   resolution tests.
 - `[AC-CAMLIB1015-F9]` and `[AC-CAMLIB1015-F10]`: Library passes ordered IDs,
-  uses aspect-safe tiles, and presents a full-width black camera bar.
+  keeps the preview's source aspect safe, and presents a full-width black
+  camera bar while gallery tiles use their own fixed crop contract.
 - `[AC-CAMLIB1015-F11]`, `[AC-CAMLIB1015-F12]`, and
   `[AC-CAMLIB1015-F13]`: `PhotoPreviewView` pages with `TabView`, toggles its
   action inset with an accessibility action, and chooses the next/previous
@@ -201,8 +202,8 @@ accessibility, and saved-image confirmation.
   plain icon buttons with preserved accessibility labels and 44-point hit
   areas; only the zoom control retains its intentional glass surface.
 - `[AC-CAMUX1015-F4]` and `[AC-CAMUX1015-E3]`:
-  `CameraGoldenSpiralGeometry.points(width:height:)` fits the normalized
-  square curve inside the actual overlay bounds and rejects invalid sizes;
+  `CameraGoldenSpiralGeometry.points(width:height:)` fits nested square
+  quarter-arcs inside a true golden rectangle and rejects invalid sizes;
   `CompositionGuideTests` cover aspect preservation and invalid inputs.
 - `[AC-CAMUX1015-F5]`, `[AC-CAMUX1015-F6]`, and `[AC-CAMUX1015-S1]`:
   `PhotoGalleryView` has an explicit Select/Done mode, selected-count bar,
@@ -221,6 +222,26 @@ The remaining camera-orientation rendering, control hit testing, gallery
 selection presentation, saved-image output, paging, downward dismissal,
 VoiceOver behavior, and Reduce Motion behavior require a physical-device pass;
 the current checkout has no connected iPhone.
+
+## Golden Spiral and library download UX traceability
+
+- `[AC-GOLDSPIRAL1015-F1]` and `[AC-GOLDSPIRAL1015-E1]`:
+  `CameraGoldenSpiralGeometry.goldenRectangle(width:height:)` preserves the
+  phi ratio and `points(width:height:)` samples quarter-circle arcs inside the
+  fitted rectangle while rejecting invalid dimensions and sample counts.
+- `[AC-GALLERYUX1015-F1]`: `GalleryPhotoTile` uses one square,
+  center-cropped frame for every thumbnail while `PhotoPreviewView` retains
+  aspect-safe full-image rendering.
+- `[AC-GALLERYUX1015-F2]` and `[AC-GALLERYUX1015-F3]`:
+  `PhotoGalleryDownload` skips already exported IDs; selection-mode Download
+  uses the existing add-only `PhotoLibraryWriter`, persists successful export
+  status, and shows an upper-right download symbol separately from selection
+  checkmarks.
+- `[AC-GALLERYUX1015-F4]`: preview Share, Save, Delete, and Edit controls use
+  transparent plain styling while preserving labels, disabled states, and
+  accessibility actions.
+- `[AC-CAMERACTRL1015-F1]`: Flash, Timer, and Aspect retain borderless
+  44-point controls while showing their current values beside their symbols.
 
 ## Persistent captured-photo flow
 
@@ -254,6 +275,7 @@ Camera
                                       ├─ horizontal swipe -> neighboring gallery photo
                                       ├─ downward swipe -> back to the gallery
                                       ├─ tap -> hide/reveal action section
+                                      ├─ Select -> Download pending Photos copies
                                       ├─ Share -> native UIActivityViewController
                                       ├─ Save -> PhotoKit add-only export of a copy
                                       ├─ Delete -> private FrameWise file/manifest only
@@ -263,11 +285,13 @@ Camera
 `CapturedPhotoGrouping` assigns each capture to a local calendar day while
 preserving newest-first order. `LibraryView` presents those groups and the
 All Photos mode; `PhotoGalleryView` passes each gallery's ordered IDs into
-Preview and renders each decoded image with its own aspect ratio and
-`scaledToFit`, so a 16:9 image uses the available width without a square crop.
-Its Select mode replaces navigation links with multi-select buttons, marks
-selected tiles, reconciles IDs against the store, and confirms private-copy
-bulk deletion before invoking `CapturedPhotoStore.remove(id:)`.
+Preview. Gallery tiles use one square `scaledToFill` crop, while Preview
+renders each decoded image with its source aspect ratio and `scaledToFit`, so
+the full 16:9 image remains available when opened. Select mode replaces
+navigation links with multi-select buttons, marks selected tiles, reconciles
+IDs against the store, offers add-only Download for pending selections, and
+confirms private-copy bulk deletion before invoking
+`CapturedPhotoStore.remove(id:)`.
 The full-width black Camera bar dismisses back to the existing camera root.
 `PhotoPreviewView` uses a `TabView(selection:)` for horizontal paging, keeps
 healthy pages available when another image is malformed, and toggles its black
@@ -280,8 +304,9 @@ The camera screen stops the existing session while Library is visible and
 starts that same configured service again when Camera reappears.
 
 PhotoKit is intentionally limited to `PHPhotoLibrary` add-only authorization
-for an explicit Preview Save. FrameWise requests no Photos read permission and
-does not send images to a network service.
+for explicit Preview Save and selection-mode Download actions. FrameWise
+requests no Photos read permission and does not send images to a network
+service.
 
 ## The testable state boundary
 

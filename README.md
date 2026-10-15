@@ -12,12 +12,15 @@ reference-photo alignment, and on-device AI guidance.
 > add-only Save-to-Photos export, FrameWise-only Delete, and a disabled Edit
 > placeholder. The camera has cycling top controls, a resizable portrait preview,
 > tap-to-focus exposure control, preview zoom presets, and an adjustable style
-> studio. It also has icon-only Composition and Resolution controls, a smooth
-> lower-right Golden Spiral guide, persisted guide/resolution intent, and a
-> device-reported maximum photo-size option. Library galleries preserve image
-> aspect ratios, support confirmed multi-selection for private-copy deletion,
-> and Preview supports horizontal paging, tap-to-hide actions, and a dominant
-> downward swipe to return to the gallery.
+> studio. It also has icon-only Composition and Resolution controls, a
+> construction-based Golden Spiral guide with a true phi rectangle and nested
+> quarter-arcs, persisted guide/resolution intent, and a device-reported
+> maximum photo-size option. Flash, Timer, and Aspect show their current values
+> without decorative button chrome. Library galleries use uniform square
+> center-cropped thumbnails, support multi-selection download to Photos and
+> private-copy deletion, and Preview supports horizontal paging, minimal plain
+> actions, tap-to-hide controls, and a dominant downward swipe to return to the
+> gallery.
 
 ## Product and design documents
 
@@ -27,6 +30,7 @@ reference-photo alignment, and on-device AI guidance.
 - [Camera settings design](docs/superpowers/specs/2026-10-14-camera-settings-design.md)
 - [Camera resolution and library preview design](docs/superpowers/specs/2026-10-15-camera-resolution-library-preview-design.md)
 - [Camera and library UX fixes design](docs/superpowers/specs/2026-10-15-camera-library-ux-fixes-design.md)
+- [Golden Spiral and library download UX design](docs/superpowers/specs/2026-10-15-golden-spiral-library-download-design.md)
 - [Code walkthrough](docs/code-walkthrough.md)
 
 ## Verified setup
@@ -85,6 +89,7 @@ FrameWise/
 │       ├── CameraSettings.swift
 │       ├── CameraCompositionGeometry.swift
 │       ├── CameraPhotoResolution.swift
+│       ├── PhotoGalleryDownload.swift
 │       ├── PhotoGallerySelection.swift
 │       ├── PhotoPreviewDismissal.swift
 │       ├── PhotoPreviewSelection.swift
@@ -104,6 +109,7 @@ FrameWise/
 │   ├── CapturedPhotoLibraryTests.swift
 │   ├── CapturedPhotoDiskStoreTests.swift
 │   ├── CameraPhotoResolutionTests.swift
+│   ├── PhotoGalleryDownloadTests.swift
 │   ├── PhotoGallerySelectionTests.swift
 │   ├── PhotoPreviewDismissalTests.swift
 │   └── PhotoPreviewSelectionTests.swift
@@ -153,13 +159,15 @@ sheet. The first static guide catalog is Off, Rule of Thirds, Centre Cross,
 Quadrant Grid, Rule of Fifths, Golden Ratio, Golden Spiral, Golden Triangle,
 Diagonal/X-Frame, and Horizon. Guide choices use borderless miniature previews,
 stay open while selection changes the live preview, and share a 20–100%
-opacity control. The top Composition control is icon-only, and the Golden
-Spiral is a smooth sampled curve with a lower-right focal turn that opens
-toward the upper-left. The guide is view-only SwiftUI artwork, so it follows
-the selected preview aspect without entering `CameraPhotoProcessor` or
-captured photo bytes. The static horizon is a reference line; live leveling
-and the advanced symmetry, perspective, safe-area, and AI guide families are
-deferred.
+opacity control. The top Composition control is icon-only. Golden Spiral uses
+a true phi rectangle, nested square construction, and sampled quarter-circle
+arcs fitted uniformly to the live preview, so the guide does not skew into an
+ellipse. Flash, Timer, and Aspect keep the same borderless controls but show
+their current values beside the symbols. The guide is view-only SwiftUI
+artwork, so it follows the selected preview aspect without entering
+`CameraPhotoProcessor` or captured photo bytes. The static horizon is a
+reference line; live leveling and the advanced symmetry, perspective,
+safe-area, and AI guide families are deferred.
 
 The icon-only Resolution control opens a black sheet with Standard and a
 dynamic `Maximum (N MP)` choice when the active format exposes a distinct
@@ -197,10 +205,11 @@ aspects and compare saved framing; tap every supported zoom preset; drag the
 exposure ruler in both directions and to its limits; try rapid pinch/preset
 changes, front/back switching, open Resolution on cameras with and without a
 distinct maximum, VoiceOver, large text, Reduce Motion, and Reduce
-Transparency. Library checks should include a 16:9 tile, horizontal Preview
-swipes, tapping the image to hide/reveal the action bar, deleting the first,
-middle, last, and only photo, and confirming unavailable images do not break
-healthy pages.
+Transparency. Library checks should include a 16:9 tile in the fixed square
+crop, multi-select download and its upper-right indicator, horizontal Preview
+swipes, tapping the image to hide/reveal the plain action bar, deleting the
+first, middle, last, and only photo, and confirming unavailable images do not
+break healthy pages.
 
 No physical iPhone was connected during the 2026-10-15 verification run
 (`idevice_id -l` could not retrieve a device list), so the actual maximum
@@ -218,9 +227,11 @@ Camera frame rate and gesture responsiveness have not been measured on-device.
   private write succeeds, and a failed write exposes a retry path.
 - Library restores stored captures after relaunch and offers By Day groups plus
   an All Photos mode. Each day group opens a newest-first three-column gallery
-  whose tiles use the source aspect ratio with a stable placeholder fallback;
-  the full-width black Camera bar returns to the existing camera root without
-  creating a second camera session.
+  whose tiles use one square center-cropped frame with a stable placeholder
+  fallback. Select mode can download pending selected photos to Photos or
+  confirm private-copy deletion; downloaded tiles show a small arrow indicator
+  in the upper-right. The full-width black Camera bar returns to the existing
+  camera root without creating a second camera session.
 - Preview receives the gallery's ordered IDs and pages horizontally with
   aspect-safe `scaledToFit` rendering. Tapping the image hides or reveals the
   black action bar, with an explicit accessibility action and no animation

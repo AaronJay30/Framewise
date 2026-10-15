@@ -255,13 +255,19 @@ struct PhotoPreviewView: View {
         isDisabled: Bool = false
     ) -> some View {
         Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .font(.caption.weight(.semibold))
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, minHeight: 44)
+            VStack(spacing: 4) {
+                Image(systemName: systemImage)
+                    .font(.body.weight(.semibold))
+
+                Text(title)
+                    .font(.caption2.weight(.medium))
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, minHeight: 52)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.borderedProminent)
-        .tint(isDisabled ? .gray : FrameWiseBrand.signalCoral)
+        .buttonStyle(.plain)
+        .foregroundStyle(isDisabled ? Color.white.opacity(0.36) : FrameWiseBrand.signalCoral)
         .disabled(isDisabled)
         .accessibilityLabel(title)
     }

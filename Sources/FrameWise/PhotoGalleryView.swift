@@ -9,19 +9,26 @@ struct PhotoGalleryView: View {
 
     @ObservedObject var photoStore: CapturedPhotoStore
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openURL) private var openURL
+    private let photoLibraryWriter: PhotoLibraryWriter
     @State private var isSelectionMode = false
     @State private var selectedPhotoIDs = Set<UUID>()
     @State private var isDeleteConfirmationPresented = false
     @State private var isDeleting = false
+    @State private var isDownloading = false
+    @State private var downloadMessage: String?
+    @State private var shouldShowPhotoSettings = false
 
     init(
         title: String,
         photoStore: CapturedPhotoStore,
-        photoIDs: [UUID]
+        photoIDs: [UUID],
+        photoLibraryWriter: PhotoLibraryWriter = PhotoLibraryWriter()
     ) {
         self.title = title
         self.photoStore = photoStore
         self.photoIDs = photoIDs
+        self.photoLibraryWriter = photoLibraryWriter
     }
 
     private var visiblePhotos: [CapturedPhoto] {
@@ -52,9 +59,10 @@ struct PhotoGalleryView: View {
                             exitSelectionMode()
                         } else {
                             isSelectionMode = true
+                            downloadMessage = nil
                         }
                     }
-                    .disabled(isDeleting)
+                    .disabled(isDeleting || isDownloading)
                     .accessibilityHint(
                         isSelectionMode
                             ? "Stops selecting photos."
@@ -110,7 +118,7 @@ struct PhotoGalleryView: View {
                             )
                         }
                         .buttonStyle(.plain)
-                        .disabled(isDeleting)
+                        .disabled(isDeleting || isDownloading)
                     } else {
                         NavigationLink {
                             PhotoPreviewView(
@@ -132,24 +140,52 @@ struct PhotoGalleryView: View {
     }
 
     private var selectionActionBar: some View {
-        HStack(spacing: 12) {
-            Button("Cancel", action: exitSelectionMode)
-                .frame(minWidth: 72, minHeight: 44)
-                .disabled(isDeleting)
+        VStack(spacing: 4) {
+            if let downloadMessage {
+                HStack(spacing: 8) {
+                    Text(downloadMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.78))
+                        .lineLimit(2)
 
-            Spacer(minLength: 0)
-
-            Text("\(selectedPhotoIDs.count) Selected")
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
-
-            Spacer(minLength: 0)
-
-            Button("Delete", role: .destructive) {
-                isDeleteConfirmationPresented = true
+                    if shouldShowPhotoSettings {
+                        Button("Settings", action: openPhotoSettings)
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(FrameWiseBrand.signalCoral)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(minWidth: 72, minHeight: 44)
-            .disabled(selectedPhotoIDs.isEmpty || isDeleting)
+
+            HStack(spacing: 10) {
+                Button("Cancel", action: exitSelectionMode)
+                    .frame(minWidth: 72, minHeight: 44)
+                    .disabled(isDeleting || isDownloading)
+
+                Spacer(minLength: 0)
+
+                Text("\(selectedPhotoIDs.count) Selected")
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+
+                Button {
+                    downloadSelectedPhotos()
+                } label: {
+                    Label(isDownloading ? "Downloading…" : "Download", systemImage: "arrow.down.to.line")
+                        .lineLimit(1)
+                }
+                .frame(minWidth: 92, minHeight: 44)
+                .foregroundStyle(FrameWiseBrand.signalCoral)
+                .disabled(pendingDownloadIDs.isEmpty || isDeleting || isDownloading)
+
+                Button("Delete", role: .destructive) {
+                    isDeleteConfirmationPresented = true
+                }
+                .frame(minWidth: 72, minHeight: 44)
+                .disabled(selectedPhotoIDs.isEmpty || isDeleting || isDownloading)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
@@ -166,18 +202,23 @@ struct PhotoGalleryView: View {
             id,
             in: selectedPhotoIDs
         )
+        downloadMessage = nil
+        shouldShowPhotoSettings = false
     }
 
     private func exitSelectionMode() {
         isSelectionMode = false
         selectedPhotoIDs.removeAll()
+        downloadMessage = nil
+        shouldShowPhotoSettings = false
     }
 
     private func deleteSelectedPhotos() {
-        guard !selectedPhotoIDs.isEmpty, !isDeleting else { return }
+        guard !selectedPhotoIDs.isEmpty, !isDeleting, !isDownloading else { return }
 
         let idsToRemove = selectedPhotoIDs
         isDeleting = true
+        downloadMessage = nil
 
         Task { @MainActor in
             for id in idsToRemove {
@@ -196,6 +237,75 @@ struct PhotoGalleryView: View {
                 selectedPhotoIDs = remainingIDs
             }
         }
+    }
+
+    private var pendingDownloadIDs: Set<UUID> {
+        PhotoGalleryDownload.pendingIDs(
+            selectedIDs: selectedPhotoIDs,
+            exportedIDs: Set(visiblePhotos.filter { $0.isExported }.map(\.id))
+        )
+    }
+
+    private func downloadSelectedPhotos() {
+        guard !selectedPhotoIDs.isEmpty,
+              !isDownloading,
+              !isDeleting else {
+            return
+        }
+
+        let photosToExport = visiblePhotos.filter { pendingDownloadIDs.contains($0.id) }
+        guard !photosToExport.isEmpty else {
+            downloadMessage = "Selected photos are already saved to Photos."
+            shouldShowPhotoSettings = false
+            return
+        }
+
+        isDownloading = true
+        downloadMessage = nil
+        shouldShowPhotoSettings = false
+
+        Task { @MainActor in
+            var savedCount = 0
+            var statusUpdateFailed = false
+            var failureMessage: String?
+            var shouldOpenSettings = false
+
+            for photo in photosToExport {
+                guard photoStore.beginExport(id: photo.id) else { continue }
+                defer { photoStore.endExport(id: photo.id) }
+
+                do {
+                    try await photoLibraryWriter.save(data: photo.data)
+                    savedCount += 1
+                    if !(await photoStore.markExported(id: photo.id)) {
+                        statusUpdateFailed = true
+                    }
+                } catch let error as PhotoLibraryWriterError {
+                    failureMessage = error.errorDescription
+                    shouldOpenSettings = error.shouldOpenSettings
+                    break
+                } catch {
+                    failureMessage = "Some photos could not be saved to Photos. Try again."
+                    break
+                }
+            }
+
+            isDownloading = false
+            shouldShowPhotoSettings = shouldOpenSettings
+
+            if let failureMessage {
+                downloadMessage = failureMessage
+            } else if statusUpdateFailed {
+                downloadMessage = "Saved \(savedCount) photo\(savedCount == 1 ? "" : "s") to Photos, but FrameWise could not update every status."
+            } else {
+                downloadMessage = "Saved \(savedCount) photo\(savedCount == 1 ? "" : "s") to Photos."
+            }
+        }
+    }
+
+    private func openPhotoSettings() {
+        guard let settingsURL = URL(string: UIApplication.openSettingsURLString) else { return }
+        openURL(settingsURL)
     }
 
     private var emptyGalleryState: some View {
@@ -227,12 +337,12 @@ private struct GalleryPhotoTile: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
+        ZStack {
             Group {
                 if let image = UIImage(data: photo.data) {
                     Image(uiImage: image)
                         .resizable()
-                        .scaledToFit()
+                        .scaledToFill()
                 } else {
                     ZStack {
                         Color.secondary.opacity(0.12)
@@ -243,20 +353,23 @@ private struct GalleryPhotoTile: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .aspectRatio(photoAspectRatio, contentMode: .fit)
+            .aspectRatio(1, contentMode: .fit)
+            .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
             if photo.isExported {
-                Image(systemName: "checkmark.circle.fill")
+                Image(systemName: "arrow.down.circle.fill")
                     .font(.system(size: 18, weight: .semibold))
                     .symbolRenderingMode(.palette)
                     .foregroundStyle(.white, FrameWiseBrand.signalCoral)
                     .padding(7)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             }
 
             if isSelectionMode {
                 selectionIndicator
                     .padding(8)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             }
         }
         .overlay {
@@ -272,11 +385,7 @@ private struct GalleryPhotoTile: View {
                     + photo.capturedAt.formatted(date: .abbreviated, time: .shortened)
             )
         )
-        .accessibilityValue(
-            isSelectionMode
-                ? (isSelected ? "Selected" : "Not selected")
-                : (photo.isExported ? "Saved to Photos" : "")
-        )
+        .accessibilityValue(accessibilityValueText)
         .accessibilityAddTraits(isSelectionMode && isSelected ? .isSelected : [])
     }
 
@@ -297,22 +406,16 @@ private struct GalleryPhotoTile: View {
         .frame(width: 28, height: 28)
     }
 
-    private var placeholderAspectRatio: CGFloat { 1 }
-
-    private var photoAspectRatio: CGFloat {
-        guard let image = UIImage(data: photo.data) else { return placeholderAspectRatio }
-        return displayAspectRatio(for: image)
-    }
-
-    private func displayAspectRatio(for image: UIImage) -> CGFloat {
-        guard image.size.width.isFinite,
-              image.size.height.isFinite,
-              image.size.width > 0,
-              image.size.height > 0 else {
-            return placeholderAspectRatio
+    private var accessibilityValueText: String {
+        var values: [String] = []
+        if isSelectionMode {
+            values.append(isSelected ? "Selected" : "Not selected")
         }
-
-        return image.size.width / image.size.height
+        if photo.isExported {
+            values.append("Downloaded to Photos")
+        }
+        return values.joined(separator: ", ")
     }
+
 }
 #endif
