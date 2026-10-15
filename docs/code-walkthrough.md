@@ -12,10 +12,11 @@ can be read from the outside in.
    `CameraViewModel` and one `CapturedPhotoStore`, then places the camera root
    inside a `NavigationStack`; it does not configure AVFoundation directly.
 3. `Sources/FrameWise/CameraViewModel.swift` is the bridge between service
-   callbacks and SwiftUI. Its published `CameraState` is what the views render,
-   while it also restores settings, owns the timer/focus lifecycles, and turns
-   each valid capture into a UUID-backed `CapturedPhoto` in a pending delivery
-   queue until private storage accepts it.
+   callbacks and SwiftUI. Its published `CameraState` and active photo
+   resolution capability are what the views render, while it also restores
+   settings, owns the timer/focus lifecycles, and turns each valid capture into
+   a UUID-backed `CapturedPhoto` in a pending delivery queue until private
+   storage accepts it.
 4. `Sources/FrameWise/CameraService.swift` owns the AVFoundation session,
    camera selection, permissions, settings application, and photo capture. It
    keeps session work on its own queue so the UI stays responsive.
@@ -24,19 +25,25 @@ can be read from the outside in.
 
 `Sources/FrameWiseCore/CameraSettings.swift` is the hardware-independent
 contract for Flash, Timer, Exposure, Tap Focus, Aspect, Zoom, the five
-app-defined Photographic Styles, and the static `CameraCompositionGuide`
-catalog. It provides safe defaults, Codable values for local persistence,
-normalized focus points, centered crop geometry, pure style adjustments, and
-safe composition opacity normalization. `CameraSettingsTests` and
+app-defined Photographic Styles, the Standard/Maximum photo-resolution intent,
+and the static `CameraCompositionGuide` catalog. It provides safe defaults,
+Codable values for local persistence, normalized focus points, centered crop
+geometry, pure style adjustments, and safe composition opacity normalization.
+`CameraPhotoResolutionCapability` turns supported format dimensions into a
+smallest Standard and largest distinct Maximum without assuming a particular
+sensor. `CameraSettingsTests` and
 `CompositionGuideTests` cover the choices, invariants, Codable round trips,
 legacy settings decoding, reset behavior, and capture snapshot behavior on the
 host.
 
 `CameraScreen` uses `CameraTopControls` for cycling Flash, Timer, and Aspect;
 Tap Focus places a `FocusExposureOverlay` beside the reticle, Styles opens the
-adjustable `CameraSettingsSheet`, and Composition opens the separate black
-`CompositionGuideSheet`. `CameraZoomControls` places supported presets
-inside the preview. These views live in `CameraControls.swift`, whose
+adjustable `CameraSettingsSheet`, Composition opens the separate black
+`CompositionGuideSheet`, and Resolution opens `CameraResolutionSheet` without
+dismissing when the setting changes. Composition and Resolution are icon-only
+top-row controls with descriptive accessibility labels/values.
+`CameraZoomControls` places supported presets inside the preview. These views
+live in `CameraControls.swift`, whose
 `CameraGlass` modifier selects native Liquid Glass on iOS 26+, a legacy
 material fallback, or opaque black when Reduce Transparency is enabled.
 The bottom dock retains only Library/Shutter/Flip.
@@ -58,8 +65,11 @@ Zoom buttons have explicit touch shapes and a non-interactive glass background.
 preview sizing, ruler coordinates, hardware-change selection, and
 `CameraZoomScale` conversion and supported preset filtering.
 
-`CameraService` applies device-dependent exposure, zoom, flash, and focus on
-its serial session queue. A capture stores its immutable `CameraSettings`
+`CameraService` applies device-dependent exposure, zoom, flash, focus, and
+photo dimensions on its serial session queue. It reads the active format's
+supported maximum photo dimensions, publishes the calculated capability, sets
+the output maximum before capture, and chooses Standard or the supported
+Maximum on each `AVCapturePhotoSettings` request. A capture stores its immutable `CameraSettings`
 snapshot by photo request ID before it enters the existing callback boundary,
 so a later settings change cannot alter that photo's processing choice. The
 active camera publishes exposure and zoom ranges plus flash availability after
@@ -91,8 +101,12 @@ borderless and black-blended, uses real miniature renderings, leaves the sheet
 open while selection changes, and binds the 20–100% opacity slider directly to
 the persisted `CameraSettings` value.
 
-`CompositionGuideOverlay` and `CompositionGuideArtwork` share one deterministic
-Canvas renderer for the live preview and sheet thumbnails. The renderer draws
+`CameraCompositionGeometry` supplies 160 normalized samples of a logarithmic
+golden-ratio spiral. Its fixed orientation starts in the lower-right focal
+region and opens toward the upper-left; normalization keeps the curve inset
+for portrait, square, and landscape bounds. `CompositionGuideOverlay` and
+`CompositionGuideArtwork` share one deterministic Canvas renderer for the
+live preview and sheet thumbnails. The renderer draws
 the first static catalog—thirds, centre cross, quadrant, fifths, golden ratio,
 golden spiral, golden triangle, Diagonal/X-Frame, and horizon—inside the actual
 aspect-sized preview frame. It is inserted after the styled preview and before
@@ -148,6 +162,32 @@ accessibility, and saved-image confirmation.
 - `[AC-COMP1015-E4]`: the guide row scrolls horizontally and labels use
   Dynamic Type-compatible SwiftUI text styles.
 
+## Camera resolution and library-preview traceability
+
+- `[AC-CAMLIB1015-F1]` and `[AC-CAMLIB1015-F2]`: the pure geometry provider
+  supplies a continuous, normalized lower-right-to-upper-left Golden Spiral;
+  the Canvas maps it into the live and miniature preview bounds.
+- `[AC-CAMLIB1015-F3]` and `[AC-CAMLIB1015-F4]`: Composition is an icon-only,
+  backgroundless top control, and guide/library camera surfaces have no
+  decorative shadow.
+- `[AC-CAMLIB1015-F5]`, `[AC-CAMLIB1015-F6]`, `[AC-CAMLIB1015-F7]`, and
+  `[AC-CAMLIB1015-F8]`: persisted resolution intent, active-format capability,
+  per-capture dimension selection, and unsupported fallback are split between
+  `CameraSettings`, `CameraPhotoResolution`, `CameraService`, and the host
+  resolution tests.
+- `[AC-CAMLIB1015-F9]` and `[AC-CAMLIB1015-F10]`: Library passes ordered IDs,
+  uses aspect-safe tiles, and presents a full-width black camera bar.
+- `[AC-CAMLIB1015-F11]`, `[AC-CAMLIB1015-F12]`, and
+  `[AC-CAMLIB1015-F13]`: `PhotoPreviewView` pages with `TabView`, toggles its
+  action inset with an accessibility action, and chooses the next/previous
+  neighbor after deletion through the core helper.
+- `[AC-CAMLIB1015-E1]` and `[AC-CAMLIB1015-E2]`: legacy settings and
+  empty/single resolution capabilities are covered by the host-side core
+  tests. `[AC-CAMLIB1015-E3]` through `[AC-CAMLIB1015-E5]` and
+  `[AC-CAMLIB1015-S1]` are implemented at the camera/UI boundaries and remain
+  device checks where camera flips, malformed image recovery, paging, tap
+  interaction, accessibility, and motion settings are involved.
+
 ## Persistent captured-photo flow
 
 `Sources/FrameWiseCore/CapturedPhoto.swift` is the hardware-independent photo
@@ -177,6 +217,8 @@ Camera
   └─ Library
        ├─ By Day -> date group -> three-column gallery -> Preview
        └─ All Photos -> three-column gallery -> Preview
+                                      ├─ swipe -> neighboring gallery photo
+                                      ├─ tap -> hide/reveal action section
                                       ├─ Share -> native UIActivityViewController
                                       ├─ Save -> PhotoKit add-only export of a copy
                                       ├─ Delete -> private FrameWise file/manifest only
@@ -185,12 +227,17 @@ Camera
 
 `CapturedPhotoGrouping` assigns each capture to a local calendar day while
 preserving newest-first order. `LibraryView` presents those groups and the
-All Photos mode; `PhotoGalleryView` reads the shared store by ID so a deleted
-photo disappears when the gallery reappears. The lower-right Camera button
-dismisses back to the existing camera root. `PhotoPreviewView` handles invalid
-or removed records with an unavailable state rather than force-unwrapping an
-image. The camera screen stops the existing session while Library is visible
-and starts that same configured service again when Camera reappears.
+All Photos mode; `PhotoGalleryView` passes each gallery's ordered IDs into
+Preview and renders each decoded image with its own aspect ratio and
+`scaledToFit`, so a 16:9 image uses the available width without a square crop.
+The full-width black Camera bar dismisses back to the existing camera root.
+`PhotoPreviewView` uses a `TabView(selection:)` for horizontal paging, keeps
+healthy pages available when another image is malformed, and toggles its black
+action section from the image area with an explicit accessibility action and
+Reduce Motion-aware transition. `PhotoPreviewSelection` chooses the next ID,
+the previous ID when the last page is removed, or no ID for the only photo.
+The camera screen stops the existing session while Library is visible and
+starts that same configured service again when Camera reappears.
 
 PhotoKit is intentionally limited to `PHPhotoLibrary` add-only authorization
 for an explicit Preview Save. FrameWise requests no Photos read permission and
@@ -257,14 +304,20 @@ swift test
 xtool dev build
 ```
 
-The host suite covers camera/branding state, camera settings contracts and
-processing fallback, captured-photo ordering and export/deletion state, disk
-restore ordering, manifest corruption, missing images, and app-private
-removal. `xtool dev build` covers the SwiftUI, AVFoundation, UIKit, Core Image,
-and PhotoKit adapters that cannot run on the host. Physical-device checks are
-still required for hardware support, timer cancellation on disappearance,
+The host suite covers camera/branding state, camera settings contracts,
+resolution capability/persistence, processing fallback, captured-photo ordering
+and export/deletion state, preview neighbor selection, disk restore ordering,
+manifest corruption, missing images, and app-private removal. `xtool dev build`
+covers the SwiftUI, AVFoundation, UIKit, Core Image, and PhotoKit adapters that
+cannot run on the host. Physical-device checks are still required for actual
+maximum megapixel labels/output dimensions, timer cancellation on disappearance,
 focus/exposure response, flash behavior, and accessibility across device
-sizes. The remaining manual acceptance map is `[AC-CAMSET1014-F1]` and
+sizes. Also verify 16:9 tile fitting, paging, tap-to-toggle controls, VoiceOver,
+Reduce Motion, and camera-flip capability refresh on a connected iPhone. The
+2026-10-15 verification run had no connected iPhone (`idevice_id -l` could not
+retrieve a device list), so actual maximum output dimensions, 16:9 viewport
+fit, paging, tap behavior, and accessibility remain device checks. The
+remaining manual acceptance map is `[AC-CAMSET1014-F1]` and
 `[AC-CAMSET1014-F9]` for top controls, styles layout, and touch targets,
 `[AC-CAMSET1014-F4]`/`[AC-CAMSET1014-F5]`/`[AC-CAMSET1014-F7]` for live
 exposure, focus, preset/pinch zoom, and preview-to-capture framing,

@@ -12,8 +12,11 @@ reference-photo alignment, and on-device AI guidance.
 > add-only Save-to-Photos export, FrameWise-only Delete, and a disabled Edit
 > placeholder. The camera has cycling top controls, a resizable portrait preview,
 > tap-to-focus exposure control, preview zoom presets, and an adjustable style
-> studio. It also has a separate Composition control with static, view-only
-> guides, persisted selection, and adjustable opacity.
+> studio. It also has icon-only Composition and Resolution controls, a smooth
+> lower-right Golden Spiral guide, persisted guide/resolution intent, and a
+> device-reported maximum photo-size option. Library galleries preserve image
+> aspect ratios, and Preview supports horizontal paging plus tap-to-hide
+> actions.
 
 ## Product and design documents
 
@@ -21,6 +24,7 @@ reference-photo alignment, and on-device AI guidance.
 - [Layout and visual design](docs/superpowers/specs/2026-10-12-framewise-layout-design.md)
 - [Camera foundation design](docs/superpowers/specs/2026-10-13-camera-foundation-design.md)
 - [Camera settings design](docs/superpowers/specs/2026-10-14-camera-settings-design.md)
+- [Camera resolution and library preview design](docs/superpowers/specs/2026-10-15-camera-resolution-library-preview-design.md)
 - [Code walkthrough](docs/code-walkthrough.md)
 
 ## Verified setup
@@ -62,6 +66,7 @@ FrameWise/
 │   │   ├── CapturedPhotoStore.swift
 │   │   ├── CameraPhotoProcessor.swift
 │   │   ├── CameraSettingsSheet.swift
+│   │   ├── CameraResolutionSheet.swift
 │   │   ├── CompositionGuideOverlay.swift
 │   │   ├── CompositionGuideSheet.swift
 │   │   ├── CameraPreview.swift
@@ -76,6 +81,9 @@ FrameWise/
 │       ├── CameraStateReducer.swift
 │       ├── CompositionGuide.swift
 │       ├── CameraSettings.swift
+│       ├── CameraCompositionGeometry.swift
+│       ├── CameraPhotoResolution.swift
+│       ├── PhotoPreviewSelection.swift
 │       ├── CameraPhotoProcessingPolicy.swift
 │       ├── BrandingTokens.swift
 │       ├── CapturedPhoto.swift
@@ -90,7 +98,9 @@ FrameWise/
 │   ├── CameraPhotoProcessingPolicyTests.swift
 │   ├── CapturedPhotoGroupingTests.swift
 │   ├── CapturedPhotoLibraryTests.swift
-│   └── CapturedPhotoDiskStoreTests.swift
+│   ├── CapturedPhotoDiskStoreTests.swift
+│   ├── CameraPhotoResolutionTests.swift
+│   └── PhotoPreviewSelectionTests.swift
 ├── Resources/
 │   ├── FrameWiseAppIcon.svg
 │   ├── FrameWiseAppIcon.png
@@ -104,8 +114,11 @@ FrameWise/
 The core state target is hardware-independent so settings invariants, the
 reducer, and persistent photo tests run on the host. `CameraSettings` owns
 defaults, Codable persistence values, device-independent crop geometry, style
-parameters, and the hardware-independent `CameraCompositionGuide` selection
-and opacity. `CapturedPhotoDiskStore` writes one image file per capture
+parameters, the hardware-independent `CameraCompositionGuide` selection and
+opacity, and the Standard/Maximum photo-resolution intent.
+`CameraPhotoResolutionCapability` is discovered from the active camera format
+at the AVFoundation boundary, so the UI shows a real maximum megapixel value
+when one exists and falls back safely when it does not. `CapturedPhotoDiskStore` writes one image file per capture
 plus an atomic manifest under the app's private Application Support directory.
 `CapturedPhotoStore` loads that library again on relaunch and only publishes a
 new item after the private write succeeds. The camera target is the iOS-facing
@@ -132,10 +145,21 @@ sheet. The first static guide catalog is Off, Rule of Thirds, Centre Cross,
 Quadrant Grid, Rule of Fifths, Golden Ratio, Golden Spiral, Golden Triangle,
 Diagonal/X-Frame, and Horizon. Guide choices use borderless miniature previews,
 stay open while selection changes the live preview, and share a 20–100%
-opacity control. The guide is view-only SwiftUI artwork, so it follows the
-selected preview aspect without entering `CameraPhotoProcessor` or captured
-photo bytes. The static horizon is a reference line; live leveling and the
-advanced symmetry, perspective, safe-area, and AI guide families are deferred.
+opacity control. The top Composition control is icon-only, and the Golden
+Spiral is a smooth sampled curve with a lower-right focal turn that opens
+toward the upper-left. The guide is view-only SwiftUI artwork, so it follows
+the selected preview aspect without entering `CameraPhotoProcessor` or
+captured photo bytes. The static horizon is a reference line; live leveling
+and the advanced symmetry, perspective, safe-area, and AI guide families are
+deferred.
+
+The icon-only Resolution control opens a black sheet with Standard and a
+dynamic `Maximum (N MP)` choice when the active format exposes a distinct
+maximum. The stored value is only the Standard/Maximum intent; it is never a
+hard-coded 45 MP promise. `CameraService` maps that intent to dimensions
+supported by the active format for each capture and refreshes the capability
+when the camera flips. Intermediate device dimensions and RAW/ProRAW remain
+deferred.
 
 Zoom presets sit inside the preview with individual touch targets; pinch
 remains available for intermediate values. Preset changes use a native zoom
@@ -149,7 +173,8 @@ Settings are restored from local `UserDefaults`; Flash Off is the fresh-install
 and reset default, while existing saved preferences are preserved. Each capture
 receives an immutable settings snapshot.
 
-The service applies exposure, focus, and zoom on its serial session queue.
+The service applies exposure, focus, zoom, and supported photo dimensions on
+its serial session queue.
 Continuous adjustments skip unchanged sensor settings and debounce local
 preference writes; leaving the camera or resigning active flushes preferences.
 Aspect and app-defined style choices are applied at the capture-to-library
@@ -160,7 +185,18 @@ cannot complete.
 Physical-device checks still required for this revision: cycle all three
 aspects and compare saved framing; tap every supported zoom preset; drag the
 exposure ruler in both directions and to its limits; try rapid pinch/preset
-changes, front/back switching, VoiceOver, large text, and Reduce Motion.
+changes, front/back switching, open Resolution on cameras with and without a
+distinct maximum, VoiceOver, large text, Reduce Motion, and Reduce
+Transparency. Library checks should include a 16:9 tile, horizontal Preview
+swipes, tapping the image to hide/reveal the action bar, deleting the first,
+middle, last, and only photo, and confirming unavailable images do not break
+healthy pages.
+
+No physical iPhone was connected during the 2026-10-15 verification run
+(`idevice_id -l` could not retrieve a device list), so the actual maximum
+megapixel label/output dimensions, 16:9 viewport fit, swipe paging,
+tap-to-toggle controls, VoiceOver, and Reduce Motion behavior remain device
+checks rather than claims of hardware verification.
 Camera frame rate and gesture responsiveness have not been measured on-device.
 
 ## Captured photo flow
@@ -171,14 +207,21 @@ Camera frame rate and gesture responsiveness have not been measured on-device.
   an opacity-only completion transition. Rapid captures are queued until each
   private write succeeds, and a failed write exposes a retry path.
 - Library restores stored captures after relaunch and offers By Day groups plus
-  an All Photos mode. Each day group opens a newest-first three-column gallery;
-  the lower-right Camera button returns to the existing camera root without
+  an All Photos mode. Each day group opens a newest-first three-column gallery
+  whose tiles use the source aspect ratio with a stable placeholder fallback;
+  the full-width black Camera bar returns to the existing camera root without
   creating a second camera session.
-- Preview offers native Share, Save, and Delete actions. Share uses the system
-  share sheet without Photos permission. Save requests Photos **add-only**
-  access and exports a copy only after the user chooses Save. Delete removes
-  only the private FrameWise copy and never removes an already-exported Photos
-  copy. Edit is visible but disabled until the editing slice is implemented.
+- Preview receives the gallery's ordered IDs and pages horizontally with
+  aspect-safe `scaledToFit` rendering. Tapping the image hides or reveals the
+  black action bar, with an explicit accessibility action and no animation
+  under Reduce Motion. Deleting the selected page moves to the next photo,
+  previous when the last page is removed, or dismisses when it was the only
+  page. Preview still offers native Share, Save, and Delete actions. Share
+  uses the system share sheet without Photos permission. Save requests Photos
+  **add-only** access and exports a copy only after the user chooses Save.
+  Delete removes only the private FrameWise copy and never removes an
+  already-exported Photos copy. Edit is visible but disabled until the editing
+  slice is implemented.
 - FrameWise never requests Photos read access and does not upload captures to a
   network service.
 The bundle ID in `xtool.yml` is still the generated placeholder and should be

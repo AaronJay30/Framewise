@@ -4,13 +4,9 @@ import SwiftUI
 import UIKit
 
 struct PhotoPreviewView: View {
-    let photoID: UUID
-    let photoIDs: [UUID]
-
     @ObservedObject var photoStore: CapturedPhotoStore
 
     private let photoLibraryWriter: PhotoLibraryWriter
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -39,8 +35,6 @@ struct PhotoPreviewView: View {
             normalizedPhotoIDs.insert(photoID, at: 0)
         }
 
-        self.photoID = photoID
-        self.photoIDs = normalizedPhotoIDs
         self.photoStore = photoStore
         self.photoLibraryWriter = photoLibraryWriter
         _selectedPhotoID = State(initialValue: photoID)

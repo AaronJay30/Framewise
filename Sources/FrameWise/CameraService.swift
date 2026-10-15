@@ -42,7 +42,7 @@ final class CameraService: NSObject, @unchecked Sendable, AVCapturePhotoCaptureD
     weak var delegate: CameraServiceDelegate?
 
     private let sessionQueue = DispatchQueue(label: "com.framewise.camera.session")
-    private let photoOutput = AVCapturePhotoOutput()
+    private var photoOutput = AVCapturePhotoOutput()
     private let captureSettingsLock = NSLock()
     private var videoInput: AVCaptureDeviceInput?
     private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
@@ -346,6 +346,10 @@ final class CameraService: NSObject, @unchecked Sendable, AVCapturePhotoCaptureD
             return coreDimensions
         }
 
+        if supportedDimensions.isEmpty, isConfigured {
+            resetPhotoOutputOnQueue()
+        }
+
         let capability = CameraPhotoResolutionCapability(
             supportedDimensions: supportedDimensions
         )
@@ -356,6 +360,22 @@ final class CameraService: NSObject, @unchecked Sendable, AVCapturePhotoCaptureD
            let maxPhotoDimensions = dimensionsByPixelCount[maximum.pixelCount] {
             photoOutput.maxPhotoDimensions = maxPhotoDimensions
         }
+    }
+
+    private func resetPhotoOutputOnQueue() {
+        let replacement = AVCapturePhotoOutput()
+
+        session.beginConfiguration()
+        session.removeOutput(photoOutput)
+        guard session.canAddOutput(replacement) else {
+            session.addOutput(photoOutput)
+            session.commitConfiguration()
+            return
+        }
+
+        session.addOutput(replacement)
+        session.commitConfiguration()
+        photoOutput = replacement
     }
 
     private func photoDimensionsOnQueue(
