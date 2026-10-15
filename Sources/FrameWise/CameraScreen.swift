@@ -127,6 +127,15 @@ struct CameraScreen: View {
                     .contentShape(Rectangle())
                     .simultaneousGesture(zoomGesture)
 
+                if viewModel.settings.compositionGuide != .off {
+                    CompositionGuideOverlay(
+                        guide: viewModel.settings.compositionGuide,
+                        opacity: Double(viewModel.settings.compositionGuideOpacity)
+                    )
+                    .transition(reduceMotion ? .identity : .opacity)
+                    .allowsHitTesting(false)
+                }
+
                 if let focusPoint = viewModel.focusPoint {
                     FocusExposureOverlay(
                         isLocked: viewModel.isFocusLocked,
@@ -150,6 +159,14 @@ struct CameraScreen: View {
             }
             .frame(width: size.width, height: size.height)
             .clipped()
+            .animation(
+                reduceMotion ? nil : .easeOut(duration: 0.18),
+                value: viewModel.settings.compositionGuide
+            )
+            .animation(
+                reduceMotion ? nil : .easeOut(duration: 0.18),
+                value: viewModel.settings.compositionGuideOpacity
+            )
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.24),
                        value: viewModel.settings.aspectRatio)
             .overlay(alignment: .bottom) {
