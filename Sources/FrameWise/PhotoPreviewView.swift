@@ -5,6 +5,7 @@ import UIKit
 
 struct PhotoPreviewView: View {
     let photoID: UUID
+    let photoIDs: [UUID]
 
     @ObservedObject var photoStore: CapturedPhotoStore
 
@@ -12,6 +13,10 @@ struct PhotoPreviewView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var selectedPhotoID: UUID
+    @State private var orderedPhotoIDs: [UUID]
+    @State private var areControlsVisible = true
     @State private var isSharePresented = false
     @State private var isDeleteConfirmationPresented = false
     @State private var isDeleting = false
@@ -23,26 +28,27 @@ struct PhotoPreviewView: View {
 
     init(
         photoID: UUID,
+        photoIDs: [UUID],
         photoStore: CapturedPhotoStore,
         photoLibraryWriter: PhotoLibraryWriter = PhotoLibraryWriter()
     ) {
+        var normalizedPhotoIDs = photoIDs
+        if normalizedPhotoIDs.isEmpty {
+            normalizedPhotoIDs = [photoID]
+        } else if !normalizedPhotoIDs.contains(photoID) {
+            normalizedPhotoIDs.insert(photoID, at: 0)
+        }
+
         self.photoID = photoID
+        self.photoIDs = normalizedPhotoIDs
         self.photoStore = photoStore
         self.photoLibraryWriter = photoLibraryWriter
+        _selectedPhotoID = State(initialValue: photoID)
+        _orderedPhotoIDs = State(initialValue: normalizedPhotoIDs)
     }
 
     var body: some View {
-        Group {
-            if let photo = photoStore.photo(withID: photoID),
-               let image = UIImage(data: photo.data) {
-                photoContent(photo: photo, image: image)
-                    .sheet(isPresented: $isSharePresented) {
-                        ShareSheet(image: image)
-                    }
-            } else {
-                unavailableState
-            }
-        }
+        previewContent
         .navigationTitle("Preview")
         .navigationBarTitleDisplayMode(.inline)
         .background(Color.black.ignoresSafeArea())
@@ -56,46 +62,119 @@ struct PhotoPreviewView: View {
         } message: {
             Text("This removes the private FrameWise copy only. It does not delete a copy already saved in Photos.")
         }
+        .onChange(of: selectedPhotoID) { _, _ in
+            resetSelectedPhotoMessages()
+        }
     }
 
-    private func photoContent(photo: CapturedPhoto, image: UIImage) -> some View {
-        ScrollView {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 20)
+    private var previewContent: some View {
+        TabView(selection: $selectedPhotoID) {
+            ForEach(orderedPhotoIDs, id: \.self) { id in
+                photoPage(for: id)
+                    .tag(id)
+            }
         }
+        .tabViewStyle(.page(indexDisplayMode: orderedPhotoIDs.count > 1 ? .automatic : .never))
         .background(Color.black)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: 8) {
-                if let actionError {
-                    Text(actionError)
-                        .font(.footnote)
-                        .foregroundStyle(.white.opacity(0.82))
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 320)
-                }
+            if areControlsVisible {
+                actionSection
+                    .transition(reduceMotion ? .identity : .opacity)
+            }
+        }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: areControlsVisible)
+        .sheet(isPresented: $isSharePresented) {
+            if let selectedImage {
+                ShareSheet(image: selectedImage)
+            } else {
+                unavailableState
+            }
+        }
+    }
 
-                if let exportMessage {
-                    Text(exportMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.white.opacity(0.82))
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 320)
-                }
+    private func photoPage(for id: UUID) -> some View {
+        ZStack {
+            Color.black
 
-                if shouldShowPhotoSettings {
-                    Button(action: openPhotoSettings) {
-                        Text("Open Settings")
-                            .frame(minWidth: 130, minHeight: 44)
-                    }
-                        .buttonStyle(.bordered)
-                        .tint(.white)
-                }
+            if let photo = photoStore.photo(withID: id),
+               let image = UIImage(data: photo.data) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                unavailablePage
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: toggleControls)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(pageAccessibilityLabel(for: id))
+        .accessibilityValue(areControlsVisible ? "Actions shown" : "Actions hidden")
+        .accessibilityAction(named: Text(areControlsVisible ? "Hide actions" : "Show actions")) {
+            toggleControls()
+        }
+    }
 
-                let exportInProgress = isExporting || photoStore.isExporting(id: photoID)
+    private var unavailablePage: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "photo.badge.exclamationmark")
+                .font(.system(size: 34, weight: .medium))
+                .foregroundStyle(FrameWiseBrand.signalCoral)
+
+            Text("Photo unavailable")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.white)
+
+            Text("This photo is no longer available in FrameWise.")
+                .font(.body)
+                .foregroundStyle(.white.opacity(0.74))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 290)
+
+            Button {
+                dismiss()
+            } label: {
+                Text("Back")
+                    .frame(minWidth: 110, minHeight: 44)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(FrameWiseBrand.signalCoral)
+        }
+        .padding(.horizontal, 24)
+    }
+
+    @ViewBuilder
+    private var actionSection: some View {
+        VStack(spacing: 8) {
+            if let actionError {
+                Text(actionError)
+                    .font(.footnote)
+                    .foregroundStyle(.white.opacity(0.82))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 320)
+            }
+
+            if let exportMessage {
+                Text(exportMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.white.opacity(0.82))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 320)
+            }
+
+            if shouldShowPhotoSettings {
+                Button(action: openPhotoSettings) {
+                    Text("Open Settings")
+                        .frame(minWidth: 130, minHeight: 44)
+                }
+                .buttonStyle(.bordered)
+                .tint(.white)
+            }
+
+            if let photo = selectedPhoto, selectedImage != nil {
+                let exportInProgress = isExporting || photoStore.isExporting(id: selectedPhotoID)
 
                 HStack(spacing: 10) {
                     actionButton(
@@ -131,14 +210,18 @@ struct PhotoPreviewView: View {
                     )
                     .accessibilityHint("Editing will be available soon.")
                 }
+            } else {
+                Text("Actions unavailable for this photo.")
+                    .font(.footnote)
+                    .foregroundStyle(.white.opacity(0.62))
+                    .frame(minHeight: 44)
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 10)
-            .padding(.bottom, 8)
-            .background(.ultraThinMaterial)
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(photo.isExported ? "Photo, saved to Photos" : "Captured photo")
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity)
+        .background(Color.black)
     }
 
     private func actionButton(
@@ -188,13 +271,36 @@ struct PhotoPreviewView: View {
         .padding(.horizontal, 24)
     }
 
+    private func toggleControls() {
+        if reduceMotion {
+            areControlsVisible.toggle()
+        } else {
+            withAnimation(.easeInOut(duration: 0.18)) {
+                areControlsVisible.toggle()
+            }
+        }
+    }
+
     private func deletePhoto() {
+        let removedID = selectedPhotoID
         isDeleting = true
         actionError = nil
 
         Task { @MainActor in
-            if await photoStore.remove(id: photoID) {
-                dismiss()
+            if await photoStore.remove(id: removedID) {
+                let nextID = PhotoPreviewSelection.neighbor(
+                    afterRemoving: removedID,
+                    from: orderedPhotoIDs
+                )
+                orderedPhotoIDs.removeAll { $0 == removedID }
+
+                guard let nextID else {
+                    dismiss()
+                    return
+                }
+
+                selectedPhotoID = nextID
+                isDeleting = false
             } else {
                 actionError = photoStore.storageError ?? "FrameWise could not remove that photo. Try again."
                 isDeleting = false
@@ -203,17 +309,18 @@ struct PhotoPreviewView: View {
     }
 
     private func saveTitle(for photo: CapturedPhoto) -> String {
-        if isExporting || photoStore.isExporting(id: photoID) { return "Saving…" }
+        if isExporting || photoStore.isExporting(id: selectedPhotoID) { return "Saving…" }
         if photo.isExported || didExportInThisPreview { return "Saved" }
         return "Save"
     }
 
     private func saveToPhotos(_ photo: CapturedPhoto) {
+        let exportID = selectedPhotoID
         guard !isExporting,
-              !photoStore.isExporting(id: photoID),
+              !photoStore.isExporting(id: exportID),
               !photo.isExported,
               !didExportInThisPreview,
-              photoStore.beginExport(id: photoID) else {
+              photoStore.beginExport(id: exportID) else {
             return
         }
 
@@ -223,14 +330,14 @@ struct PhotoPreviewView: View {
 
         Task { @MainActor in
             defer {
-                photoStore.endExport(id: photoID)
+                photoStore.endExport(id: exportID)
                 isExporting = false
             }
 
             do {
                 try await photoLibraryWriter.save(data: photo.data)
                 didExportInThisPreview = true
-                if await photoStore.markExported(id: photoID) {
+                if await photoStore.markExported(id: exportID) {
                     exportMessage = "Saved a copy to Photos."
                 } else {
                     exportMessage = "Saved a copy to Photos, but FrameWise could not update its export status."
@@ -247,6 +354,27 @@ struct PhotoPreviewView: View {
     private func openPhotoSettings() {
         guard let settingsURL = URL(string: UIApplication.openSettingsURLString) else { return }
         openURL(settingsURL)
+    }
+
+    private var selectedPhoto: CapturedPhoto? {
+        photoStore.photo(withID: selectedPhotoID)
+    }
+
+    private var selectedImage: UIImage? {
+        guard let selectedPhoto else { return nil }
+        return UIImage(data: selectedPhoto.data)
+    }
+
+    private func pageAccessibilityLabel(for id: UUID) -> String {
+        guard let photo = photoStore.photo(withID: id) else { return "Photo unavailable" }
+        return photo.isExported ? "Photo, saved to Photos" : "Captured photo"
+    }
+
+    private func resetSelectedPhotoMessages() {
+        actionError = nil
+        exportMessage = nil
+        didExportInThisPreview = false
+        shouldShowPhotoSettings = false
     }
 }
 #endif

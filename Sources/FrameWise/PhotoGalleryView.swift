@@ -5,7 +5,7 @@ import UIKit
 
 struct PhotoGalleryView: View {
     let title: String
-    let photoIDs: Set<UUID>?
+    let photoIDs: [UUID]
 
     @ObservedObject var photoStore: CapturedPhotoStore
     @Environment(\.colorScheme) private var colorScheme
@@ -13,7 +13,7 @@ struct PhotoGalleryView: View {
     init(
         title: String,
         photoStore: CapturedPhotoStore,
-        photoIDs: Set<UUID>? = nil
+        photoIDs: [UUID]
     ) {
         self.title = title
         self.photoStore = photoStore
@@ -21,11 +21,8 @@ struct PhotoGalleryView: View {
     }
 
     private var visiblePhotos: [CapturedPhoto] {
-        guard let photoIDs else {
-            return photoStore.photos
-        }
-
-        return photoStore.photos.filter { photoIDs.contains($0.id) }
+        let photosByID = Dictionary(uniqueKeysWithValues: photoStore.photos.map { ($0.id, $0) })
+        return photoIDs.compactMap { photosByID[$0] }
     }
 
     var body: some View {
@@ -42,7 +39,9 @@ struct PhotoGalleryView: View {
     }
 
     private var gallery: some View {
-        ScrollView {
+        let orderedIDs = visiblePhotos.map(\.id)
+
+        return ScrollView {
             LazyVGrid(
                 columns: [
                     GridItem(.flexible(), spacing: 10),
@@ -53,7 +52,11 @@ struct PhotoGalleryView: View {
             ) {
                 ForEach(visiblePhotos) { photo in
                     NavigationLink {
-                        PhotoPreviewView(photoID: photo.id, photoStore: photoStore)
+                        PhotoPreviewView(
+                            photoID: photo.id,
+                            photoIDs: orderedIDs,
+                            photoStore: photoStore
+                        )
                     } label: {
                         GalleryPhotoTile(photo: photo)
                     }
@@ -98,7 +101,7 @@ private struct GalleryPhotoTile: View {
                 if let image = UIImage(data: photo.data) {
                     Image(uiImage: image)
                         .resizable()
-                        .scaledToFill()
+                        .scaledToFit()
                 } else {
                     ZStack {
                         Color.secondary.opacity(0.12)
@@ -109,7 +112,7 @@ private struct GalleryPhotoTile: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .aspectRatio(1, contentMode: .fit)
+            .aspectRatio(photoAspectRatio, contentMode: .fit)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
             if photo.isExported {
@@ -133,6 +136,24 @@ private struct GalleryPhotoTile: View {
                     + photo.capturedAt.formatted(date: .abbreviated, time: .shortened)
             )
         )
+    }
+
+    private var placeholderAspectRatio: CGFloat { 1 }
+
+    private var photoAspectRatio: CGFloat {
+        guard let image = UIImage(data: photo.data) else { return placeholderAspectRatio }
+        return displayAspectRatio(for: image)
+    }
+
+    private func displayAspectRatio(for image: UIImage) -> CGFloat {
+        guard image.size.width.isFinite,
+              image.size.height.isFinite,
+              image.size.width > 0,
+              image.size.height > 0 else {
+            return placeholderAspectRatio
+        }
+
+        return image.size.width / image.size.height
     }
 }
 #endif

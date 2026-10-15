@@ -63,7 +63,11 @@ struct LibraryView: View {
         case .byDay:
             dayGroups
         case .allPhotos:
-            PhotoGalleryView(title: "All Photos", photoStore: photoStore)
+            PhotoGalleryView(
+                title: "All Photos",
+                photoStore: photoStore,
+                photoIDs: photoStore.photos.map(\.id)
+            )
         }
     }
 
@@ -80,7 +84,7 @@ struct LibraryView: View {
                         PhotoGalleryView(
                             title: dayTitle(for: group.day),
                             photoStore: photoStore,
-                            photoIDs: Set(group.photos.map(\.id))
+                            photoIDs: group.photos.map(\.id)
                         )
                     } label: {
                         DayGroupCard(
@@ -184,18 +188,16 @@ struct LibraryView: View {
             dismiss()
         } label: {
             Image(systemName: "camera.fill")
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 64, height: 64)
-                .background(FrameWiseBrand.signalCoral)
-                .clipShape(Circle())
-                .shadow(color: .black.opacity(0.22), radius: 12, y: 5)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(FrameWiseBrand.signalCoral)
+                .frame(maxWidth: .infinity, minHeight: 56)
         }
+        .buttonStyle(.plain)
         .accessibilityLabel("Camera")
         .accessibilityHint("Returns to the camera without creating a new camera session.")
-        .frame(minWidth: 44, minHeight: 44)
-        .padding(.trailing, 20)
-        .padding(.bottom, 12)
+        .frame(maxWidth: .infinity, minHeight: 56)
+        .background(Color.black)
+        .environment(\.colorScheme, .dark)
     }
 }
 
