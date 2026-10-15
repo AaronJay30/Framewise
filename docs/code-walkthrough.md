@@ -52,7 +52,10 @@ The preview uses `CameraAspectRatio.previewSize` to fit the selected aspect
 into the available space. Its actual frame changes between square, portrait
 4:3, and portrait 16:9; there is no fixed 3:4 crop-mask container. The preview
 layer center-fills that frame, while photo processing uses the same selected
-aspect for its centered `cropRect`. Preview and photo connections
+aspect for its centered `cropRect`; that crop geometry switches to the
+reciprocal target when the normalized source image is landscape, so a
+landscape capture is not forced through the portrait UI ratio. Preview and
+photo connections
 use device-aware rotation coordinators, refreshed on camera changes, rather
 than assuming every sensor uses a 90-degree portrait rotation. The service
 publishes only the device ID to the main actor; preview rotation follows the
@@ -188,6 +191,37 @@ accessibility, and saved-image confirmation.
   device checks where camera flips, malformed image recovery, paging, tap
   interaction, accessibility, and motion settings are involved.
 
+## Camera and library interaction fixes traceability
+
+- `[AC-CAMUX1015-F1]` and `[AC-CAMUX1015-F2]`: `CameraAspectRatio.cropRect`
+  selects a landscape reciprocal target for normalized landscape source pixels
+  while retaining safe portrait, square, and invalid-input behavior; the
+  orientation cases are covered by `CameraControlTests`.
+- `[AC-CAMUX1015-F3]`: `CameraTopControls` and the camera-flip action use
+  plain icon buttons with preserved accessibility labels and 44-point hit
+  areas; only the zoom control retains its intentional glass surface.
+- `[AC-CAMUX1015-F4]` and `[AC-CAMUX1015-E3]`:
+  `CameraGoldenSpiralGeometry.points(width:height:)` fits the normalized
+  square curve inside the actual overlay bounds and rejects invalid sizes;
+  `CompositionGuideTests` cover aspect preservation and invalid inputs.
+- `[AC-CAMUX1015-F5]`, `[AC-CAMUX1015-F6]`, and `[AC-CAMUX1015-S1]`:
+  `PhotoGalleryView` has an explicit Select/Done mode, selected-count bar,
+  checkmarks, stale-selection reconciliation, and a destructive confirmation
+  before calling the existing private-store deletion API. The dialog names
+  the private-copy boundary and never requests Photos deletion permission.
+- `[AC-CAMUX1015-F7]`, `[AC-CAMUX1015-E1]`, and `[AC-CAMUX1015-E3]`:
+  `PhotoPreviewDismissal` accepts only a finite, dominant downward drag above
+  its threshold. `PhotoPreviewView` applies that rule as a simultaneous
+  gesture so horizontal `TabView` paging remains available; the pure
+  direction/threshold cases are covered by `PhotoPreviewDismissalTests`.
+- `[AC-CAMUX1015-E2]`: `PhotoGallerySelection.reconciled` removes IDs that
+  are no longer visible before a selection action can use them.
+
+The remaining camera-orientation rendering, control hit testing, gallery
+selection presentation, saved-image output, paging, downward dismissal,
+VoiceOver behavior, and Reduce Motion behavior require a physical-device pass;
+the current checkout has no connected iPhone.
+
 ## Persistent captured-photo flow
 
 `Sources/FrameWiseCore/CapturedPhoto.swift` is the hardware-independent photo
@@ -217,7 +251,8 @@ Camera
   └─ Library
        ├─ By Day -> date group -> three-column gallery -> Preview
        └─ All Photos -> three-column gallery -> Preview
-                                      ├─ swipe -> neighboring gallery photo
+                                      ├─ horizontal swipe -> neighboring gallery photo
+                                      ├─ downward swipe -> back to the gallery
                                       ├─ tap -> hide/reveal action section
                                       ├─ Share -> native UIActivityViewController
                                       ├─ Save -> PhotoKit add-only export of a copy
@@ -230,12 +265,17 @@ preserving newest-first order. `LibraryView` presents those groups and the
 All Photos mode; `PhotoGalleryView` passes each gallery's ordered IDs into
 Preview and renders each decoded image with its own aspect ratio and
 `scaledToFit`, so a 16:9 image uses the available width without a square crop.
+Its Select mode replaces navigation links with multi-select buttons, marks
+selected tiles, reconciles IDs against the store, and confirms private-copy
+bulk deletion before invoking `CapturedPhotoStore.remove(id:)`.
 The full-width black Camera bar dismisses back to the existing camera root.
 `PhotoPreviewView` uses a `TabView(selection:)` for horizontal paging, keeps
 healthy pages available when another image is malformed, and toggles its black
 action section from the image area with an explicit accessibility action and
-Reduce Motion-aware transition. `PhotoPreviewSelection` chooses the next ID,
-the previous ID when the last page is removed, or no ID for the only photo.
+Reduce Motion-aware transition. It also uses the pure `PhotoPreviewDismissal`
+direction check for a dominant downward drag, leaving horizontal paging to the
+`TabView`. `PhotoPreviewSelection` chooses the next ID, the previous ID when
+the last page is removed, or no ID for the only photo.
 The camera screen stops the existing session while Library is visible and
 starts that same configured service again when Camera reappears.
 

@@ -21,6 +21,7 @@ struct PhotoPreviewView: View {
     @State private var actionError: String?
     @State private var exportMessage: String?
     @State private var shouldShowPhotoSettings = false
+    @State private var previewDragOffset: CGFloat = 0
 
     init(
         photoID: UUID,
@@ -58,6 +59,7 @@ struct PhotoPreviewView: View {
         }
         .onChange(of: selectedPhotoID) { _, _ in
             resetSelectedPhotoMessages()
+            previewDragOffset = 0
         }
     }
 
@@ -109,6 +111,34 @@ struct PhotoPreviewView: View {
         .accessibilityAction(named: Text(areControlsVisible ? "Hide actions" : "Show actions")) {
             toggleControls()
         }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 12)
+                .onChanged { value in
+                    guard value.translation.height > 0,
+                          value.translation.height > abs(value.translation.width) else {
+                        previewDragOffset = 0
+                        return
+                    }
+
+                    previewDragOffset = min(value.translation.height, 260)
+                }
+                .onEnded { value in
+                    let shouldDismiss = PhotoPreviewDismissal.shouldDismiss(
+                        translationX: Double(value.translation.width),
+                        translationY: Double(value.translation.height)
+                    )
+
+                    if shouldDismiss {
+                        dismiss()
+                    } else {
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
+                            previewDragOffset = 0
+                        }
+                    }
+                }
+        )
+        .offset(y: previewDragOffset)
+        .opacity(1 - min(Double(previewDragOffset / 520), 0.45))
     }
 
     private var unavailablePage: some View {

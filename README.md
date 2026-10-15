@@ -15,8 +15,9 @@ reference-photo alignment, and on-device AI guidance.
 > studio. It also has icon-only Composition and Resolution controls, a smooth
 > lower-right Golden Spiral guide, persisted guide/resolution intent, and a
 > device-reported maximum photo-size option. Library galleries preserve image
-> aspect ratios, and Preview supports horizontal paging plus tap-to-hide
-> actions.
+> aspect ratios, support confirmed multi-selection for private-copy deletion,
+> and Preview supports horizontal paging, tap-to-hide actions, and a dominant
+> downward swipe to return to the gallery.
 
 ## Product and design documents
 
@@ -25,6 +26,7 @@ reference-photo alignment, and on-device AI guidance.
 - [Camera foundation design](docs/superpowers/specs/2026-10-13-camera-foundation-design.md)
 - [Camera settings design](docs/superpowers/specs/2026-10-14-camera-settings-design.md)
 - [Camera resolution and library preview design](docs/superpowers/specs/2026-10-15-camera-resolution-library-preview-design.md)
+- [Camera and library UX fixes design](docs/superpowers/specs/2026-10-15-camera-library-ux-fixes-design.md)
 - [Code walkthrough](docs/code-walkthrough.md)
 
 ## Verified setup
@@ -83,6 +85,8 @@ FrameWise/
 │       ├── CameraSettings.swift
 │       ├── CameraCompositionGeometry.swift
 │       ├── CameraPhotoResolution.swift
+│       ├── PhotoGallerySelection.swift
+│       ├── PhotoPreviewDismissal.swift
 │       ├── PhotoPreviewSelection.swift
 │       ├── CameraPhotoProcessingPolicy.swift
 │       ├── BrandingTokens.swift
@@ -100,6 +104,8 @@ FrameWise/
 │   ├── CapturedPhotoLibraryTests.swift
 │   ├── CapturedPhotoDiskStoreTests.swift
 │   ├── CameraPhotoResolutionTests.swift
+│   ├── PhotoGallerySelectionTests.swift
+│   ├── PhotoPreviewDismissalTests.swift
 │   └── PhotoPreviewSelectionTests.swift
 ├── Resources/
 │   ├── FrameWiseAppIcon.svg
@@ -132,7 +138,9 @@ The Camera screen puts direct cycling controls at the top: Flash
 Off → Auto → On, Timer Off → 3s → 5s → 10s, and Aspect 4:3 → 1:1 → 16:9.
 Rectangular aspects are portrait (3 wide by 4 high, or 9 wide by 16 high).
 The whole preview resizes to the selected aspect, surrounded by the black
-camera canvas without a white outline. Tapping the preview focuses at that
+camera canvas without a white outline. The top camera actions and bottom
+camera flip action are icon-only controls with 44-point hit areas and no
+decorative capsule or shadow. Tapping the preview focuses at that
 point and reveals a small vertical exposure line beside the focus marker:
 swipe up to brighten and down to darken. Long-press the marker to lock or
 unlock focus. The user-facing exposure range is capped at ±2 EV even when the
@@ -178,7 +186,9 @@ its serial session queue.
 Continuous adjustments skip unchanged sensor settings and debounce local
 preference writes; leaving the camera or resigning active flushes preferences.
 Aspect and app-defined style choices are applied at the capture-to-library
-boundary by `CameraPhotoProcessor`; `CameraPhotoProcessingPolicy` returns the
+boundary with orientation-aware crop geometry, so a landscape source keeps a
+landscape output instead of receiving the portrait UI crop.
+`CameraPhotoProcessor` performs that work; `CameraPhotoProcessingPolicy` returns the
 original capture bytes whenever decoding, filtering, cropping, or encoding
 cannot complete.
 
