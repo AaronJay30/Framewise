@@ -38,6 +38,32 @@ struct CompositionGuideSheet: View {
                     }
                 }
 
+                if settings.compositionGuide.supportsFlipControls {
+                    HStack(spacing: 20) {
+                        Text("Flip")
+                            .font(.headline)
+                        Spacer(minLength: 0)
+                        flipButton(
+                            "Horizontal",
+                            symbol: "arrow.left.and.right",
+                            isFlipped: settings.compositionGuideFlipHorizontal
+                        ) {
+                            var next = settings
+                            next.compositionGuideFlipHorizontal.toggle()
+                            onChange(next)
+                        }
+                        flipButton(
+                            "Vertical",
+                            symbol: "arrow.up.and.down",
+                            isFlipped: settings.compositionGuideFlipVertical
+                        ) {
+                            var next = settings
+                            next.compositionGuideFlipVertical.toggle()
+                            onChange(next)
+                        }
+                    }
+                }
+
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Text("Opacity")
@@ -78,7 +104,9 @@ struct CompositionGuideSheet: View {
                     CompositionGuideArtwork(
                         guide: guide,
                         opacity: Double(settings.compositionGuideOpacity),
-                        lineColor: selected ? FrameWiseBrand.signalCoral : .white
+                        lineColor: selected ? FrameWiseBrand.signalCoral : .white,
+                        flipHorizontal: selected && settings.compositionGuideFlipHorizontal,
+                        flipVertical: selected && settings.compositionGuideFlipVertical
                     )
                     .frame(width: 82, height: 96)
 
@@ -100,6 +128,28 @@ struct CompositionGuideSheet: View {
         .accessibilityLabel("Composition guide \(guide.title)")
         .accessibilityValue(selected ? "Selected" : "")
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func flipButton(
+        _ title: String,
+        symbol: String,
+        isFlipped: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(spacing: 5) {
+                Image(systemName: symbol)
+                    .font(.body.weight(.semibold))
+                Text(title)
+                    .font(.caption)
+            }
+            .foregroundStyle(isFlipped ? FrameWiseBrand.signalCoral : .white)
+            .frame(minWidth: 62, minHeight: 48)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Flip composition \(title.lowercased())")
+        .accessibilityValue(isFlipped ? "On" : "Off")
     }
 
     private var opacityBinding: Binding<Float> {

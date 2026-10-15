@@ -245,6 +245,11 @@ public struct CameraStyleAdjustments: Equatable, Codable, Sendable {
         self.blueMultiplier = blueMultiplier
     }
 
+    public var isIdentity: Bool {
+        saturation == 1 && contrast == 1 && brightness == 0
+            && redMultiplier == 1 && greenMultiplier == 1 && blueMultiplier == 1
+    }
+
     public func blended(with target: CameraStyleAdjustments, amount: Double) -> CameraStyleAdjustments {
         let value = min(max(amount.isFinite ? amount : 0, 0), 1)
         func mix(_ start: Double, _ end: Double) -> Double {
@@ -352,6 +357,8 @@ public struct CameraSettings: Equatable, Codable, Sendable {
     public var styleIntensity: Float
     public var compositionGuide: CameraCompositionGuide
     public var compositionGuideOpacity: Float
+    public var compositionGuideFlipHorizontal: Bool
+    public var compositionGuideFlipVertical: Bool
     public var photoResolution: CameraPhotoResolution
 
     public init(
@@ -364,6 +371,8 @@ public struct CameraSettings: Equatable, Codable, Sendable {
         styleIntensity: Float = 1,
         compositionGuide: CameraCompositionGuide = .off,
         compositionGuideOpacity: Float = 0.60,
+        compositionGuideFlipHorizontal: Bool = false,
+        compositionGuideFlipVertical: Bool = false,
         photoResolution: CameraPhotoResolution = .standard
     ) {
         self.flashMode = flashMode
@@ -375,6 +384,8 @@ public struct CameraSettings: Equatable, Codable, Sendable {
         self.styleIntensity = styleIntensity
         self.compositionGuide = compositionGuide
         self.compositionGuideOpacity = compositionGuideOpacity
+        self.compositionGuideFlipHorizontal = compositionGuideFlipHorizontal
+        self.compositionGuideFlipVertical = compositionGuideFlipVertical
         self.photoResolution = photoResolution
     }
 
@@ -390,6 +401,8 @@ public struct CameraSettings: Equatable, Codable, Sendable {
         case styleIntensity
         case compositionGuide
         case compositionGuideOpacity
+        case compositionGuideFlipHorizontal
+        case compositionGuideFlipVertical
         case photoResolution
     }
 
@@ -404,6 +417,8 @@ public struct CameraSettings: Equatable, Codable, Sendable {
         self.styleIntensity = try values.decodeIfPresent(Float.self, forKey: .styleIntensity) ?? 1
         self.compositionGuide = try values.decodeIfPresent(CameraCompositionGuide.self, forKey: .compositionGuide) ?? .off
         self.compositionGuideOpacity = try values.decodeIfPresent(Float.self, forKey: .compositionGuideOpacity) ?? 0.60
+        self.compositionGuideFlipHorizontal = try values.decodeIfPresent(Bool.self, forKey: .compositionGuideFlipHorizontal) ?? false
+        self.compositionGuideFlipVertical = try values.decodeIfPresent(Bool.self, forKey: .compositionGuideFlipVertical) ?? false
         self.photoResolution = try values.decodeIfPresent(CameraPhotoResolution.self, forKey: .photoResolution) ?? .standard
     }
 
@@ -418,6 +433,8 @@ public struct CameraSettings: Equatable, Codable, Sendable {
         try values.encode(styleIntensity, forKey: .styleIntensity)
         try values.encode(compositionGuide, forKey: .compositionGuide)
         try values.encode(compositionGuideOpacity, forKey: .compositionGuideOpacity)
+        try values.encode(compositionGuideFlipHorizontal, forKey: .compositionGuideFlipHorizontal)
+        try values.encode(compositionGuideFlipVertical, forKey: .compositionGuideFlipVertical)
         try values.encode(photoResolution, forKey: .photoResolution)
     }
 

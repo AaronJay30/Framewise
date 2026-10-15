@@ -65,7 +65,7 @@ public enum CameraGoldenSpiralGeometry {
     /// squares from its left, bottom, right, and top edges, then samples a
     /// quarter-circle in each square. The returned order runs from the inner
     /// focal turn toward the outer sweep.
-    public static func points(sampleCount: Int = 160) -> [CameraGuidePoint] {
+    public static func points(sampleCount: Int = 1_600) -> [CameraGuidePoint] {
         points(width: 1, height: 1, sampleCount: sampleCount)
     }
 
@@ -74,7 +74,7 @@ public enum CameraGoldenSpiralGeometry {
     public static func points(
         width: Double,
         height: Double,
-        sampleCount: Int = 160
+        sampleCount: Int = 1_600
     ) -> [CameraGuidePoint] {
         guard sampleCount > 0,
               let rectangle = goldenRectangle(width: width, height: height) else {

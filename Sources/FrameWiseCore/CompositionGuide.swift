@@ -12,6 +12,10 @@ public enum CameraCompositionGuide: String, CaseIterable, Codable, Equatable, Se
     case diagonalCross
     case horizon
 
+    public var supportsFlipControls: Bool {
+        self == .goldenSpiral || self == .goldenTriangle
+    }
+
     public var title: String {
         switch self {
         case .off:

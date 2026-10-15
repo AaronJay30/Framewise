@@ -5,9 +5,28 @@ import FrameWiseCore
 struct CompositionGuideOverlay: View {
     let guide: CameraCompositionGuide
     let opacity: Double
+    let flipHorizontal: Bool
+    let flipVertical: Bool
+
+    init(
+        guide: CameraCompositionGuide,
+        opacity: Double,
+        flipHorizontal: Bool = false,
+        flipVertical: Bool = false
+    ) {
+        self.guide = guide
+        self.opacity = opacity
+        self.flipHorizontal = flipHorizontal
+        self.flipVertical = flipVertical
+    }
 
     var body: some View {
-        CompositionGuideArtwork(guide: guide, opacity: opacity)
+        CompositionGuideArtwork(
+            guide: guide,
+            opacity: opacity,
+            flipHorizontal: flipHorizontal,
+            flipVertical: flipVertical
+        )
     }
 }
 
@@ -15,21 +34,36 @@ struct CompositionGuideArtwork: View {
     let guide: CameraCompositionGuide
     let opacity: Double
     let lineColor: Color
+    let flipHorizontal: Bool
+    let flipVertical: Bool
 
     init(
         guide: CameraCompositionGuide,
         opacity: Double,
-        lineColor: Color = .white
+        lineColor: Color = .white,
+        flipHorizontal: Bool = false,
+        flipVertical: Bool = false
     ) {
         self.guide = guide
         self.opacity = opacity
         self.lineColor = lineColor
+        self.flipHorizontal = flipHorizontal
+        self.flipVertical = flipVertical
     }
 
     var body: some View {
         Canvas { context, size in
             guard guide != .off, size.width > 0, size.height > 0 else { return }
-            drawGuide(guide, in: size, context: &context)
+            var guideContext = context
+            if flipHorizontal {
+                guideContext.translateBy(x: size.width, y: 0)
+                guideContext.scaleBy(x: -1, y: 1)
+            }
+            if flipVertical {
+                guideContext.translateBy(x: 0, y: size.height)
+                guideContext.scaleBy(x: 1, y: -1)
+            }
+            drawGuide(guide, in: size, context: &guideContext)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .allowsHitTesting(false)
@@ -114,7 +148,6 @@ struct CompositionGuideArtwork: View {
             stroke(horizontalLine(at: first))
             stroke(horizontalLine(at: second))
         case .goldenSpiral:
-            stroke(goldenRectanglePath(in: CGRect(origin: .zero, size: size)), opacity: 0.55)
             stroke(goldenSpiralPath(in: CGRect(origin: .zero, size: size)))
         case .goldenTriangle:
             let start = CGPoint.zero
@@ -193,22 +226,5 @@ struct CompositionGuideArtwork: View {
         return path
     }
 
-    private func goldenRectanglePath(in bounds: CGRect) -> Path {
-        guard let rectangle = CameraGoldenSpiralGeometry.goldenRectangle(
-            width: Double(bounds.width),
-            height: Double(bounds.height)
-        ) else {
-            return Path()
-        }
-
-        return Path(
-            CGRect(
-                x: bounds.minX + rectangle.x,
-                y: bounds.minY + rectangle.y,
-                width: rectangle.width,
-                height: rectangle.height
-            )
-        )
-    }
 }
 #endif

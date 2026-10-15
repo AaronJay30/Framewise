@@ -104,10 +104,12 @@ borderless and black-blended, uses real miniature renderings, leaves the sheet
 open while selection changes, and binds the 20–100% opacity slider directly to
 the persisted `CameraSettings` value.
 
-`CameraCompositionGeometry` supplies 160 normalized samples of a logarithmic
+`CameraCompositionGeometry` supplies 1,600 normalized samples of a logarithmic
 golden-ratio spiral. Its fixed orientation starts in the lower-right focal
-region and opens toward the upper-left; normalization keeps the curve inset
-for portrait, square, and landscape bounds. `CompositionGuideOverlay` and
+region and opens toward the upper-left; the smooth curve keeps its circular
+arcs inside the fitted golden rectangle without drawing the rectangle border.
+Horizontal and vertical flips are independently persisted for the asymmetric
+Golden Spiral and Golden Triangle guides. `CompositionGuideOverlay` and
 `CompositionGuideArtwork` share one deterministic Canvas renderer for the
 live preview and sheet thumbnails. The renderer draws
 the first static catalog—thirds, centre cross, quadrant, fifths, golden ratio,
@@ -212,9 +214,10 @@ accessibility, and saved-image confirmation.
   the private-copy boundary and never requests Photos deletion permission.
 - `[AC-CAMUX1015-F7]`, `[AC-CAMUX1015-E1]`, and `[AC-CAMUX1015-E3]`:
   `PhotoPreviewDismissal` accepts only a finite, dominant downward drag above
-  its threshold. `PhotoPreviewView` applies that rule as a simultaneous
-  gesture so horizontal `TabView` paging remains available; the pure
-  direction/threshold cases are covered by `PhotoPreviewDismissalTests`.
+  its threshold. `PhotoPreviewView` attaches its simultaneous gesture to the
+  pager and only updates the dismissal offset for downward-dominant motion, so
+  horizontal swipes remain owned by `TabView`; direction and threshold cases
+  are covered by `PhotoPreviewDismissalTests`.
 - `[AC-CAMUX1015-E2]`: `PhotoGallerySelection.reconciled` removes IDs that
   are no longer visible before a selection action can use them.
 
@@ -297,8 +300,9 @@ The full-width black Camera bar dismisses back to the existing camera root.
 healthy pages available when another image is malformed, and toggles its black
 action section from the image area with an explicit accessibility action and
 Reduce Motion-aware transition. It also uses the pure `PhotoPreviewDismissal`
-direction check for a dominant downward drag, leaving horizontal paging to the
-`TabView`. `PhotoPreviewSelection` chooses the next ID, the previous ID when
+direction check for a dominant downward drag at the pager level, leaving
+horizontal paging to the `TabView` without updating the preview offset.
+`PhotoPreviewSelection` chooses the next ID, the previous ID when
 the last page is removed, or no ID for the only photo.
 The camera screen stops the existing session while Library is visible and
 starts that same configured service again when Camera reappears.

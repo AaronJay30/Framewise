@@ -13,8 +13,9 @@ reference-photo alignment, and on-device AI guidance.
 > placeholder. The camera has cycling top controls, a resizable portrait preview,
 > tap-to-focus exposure control, preview zoom presets, and an adjustable style
 > studio. It also has icon-only Composition and Resolution controls, a
-> construction-based Golden Spiral guide with a true phi rectangle and nested
-> quarter-arcs, persisted guide/resolution intent, and a device-reported
+> construction-based Golden Spiral guide with smooth circular arcs and no
+> visible rectangle border, adjustable flips for asymmetric guides, persisted
+> guide/resolution intent, and a device-reported
 > maximum photo-size option. Flash, Timer, and Aspect show their current values
 > without decorative button chrome. Library galleries use uniform square
 > center-cropped thumbnails, support multi-selection download to Photos and

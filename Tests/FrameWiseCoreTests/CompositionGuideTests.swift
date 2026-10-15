@@ -36,11 +36,21 @@ final class CompositionGuideTests: XCTestCase {
         )
     }
 
+    func testOnlyAsymmetricGuidesOfferFlipControls() {
+        XCTAssertTrue(CameraCompositionGuide.goldenSpiral.supportsFlipControls)
+        XCTAssertTrue(CameraCompositionGuide.goldenTriangle.supportsFlipControls)
+        XCTAssertFalse(CameraCompositionGuide.ruleOfThirds.supportsFlipControls)
+        XCTAssertFalse(CameraCompositionGuide.goldenRatio.supportsFlipControls)
+        XCTAssertFalse(CameraCompositionGuide.diagonalCross.supportsFlipControls)
+    }
+
     // [AC-COMP1015-F7]
     func testAC_COMP1015_F7_CompositionSettingsRoundTripThroughCodable() throws {
         let settings = CameraSettings(
             compositionGuide: .goldenSpiral,
-            compositionGuideOpacity: 0.35
+            compositionGuideOpacity: 0.35,
+            compositionGuideFlipHorizontal: true,
+            compositionGuideFlipVertical: true
         )
 
         let data = try JSONEncoder().encode(settings)
@@ -64,6 +74,8 @@ final class CompositionGuideTests: XCTestCase {
         XCTAssertEqual(decoded.styleIntensity, 0.7)
         XCTAssertEqual(decoded.compositionGuide, .off)
         XCTAssertEqual(decoded.compositionGuideOpacity, 0.60)
+        XCTAssertFalse(decoded.compositionGuideFlipHorizontal)
+        XCTAssertFalse(decoded.compositionGuideFlipVertical)
     }
 
     // [AC-COMP1015-E2]
@@ -127,6 +139,23 @@ final class CompositionGuideTests: XCTestCase {
                 0.20
             )
         }
+    }
+
+    func testGoldenSpiralDefaultSamplingKeepsTheRenderedCurveSmooth() {
+        let width = 390.0
+        let height = 844.0
+        let points = CameraGoldenSpiralGeometry.points(width: width, height: height)
+        let longestSegment = zip(points, points.dropFirst())
+            .map {
+                hypot(
+                    ($0.0.x - $0.1.x) * width,
+                    ($0.0.y - $0.1.y) * height
+                )
+            }
+            .max() ?? .infinity
+
+        XCTAssertGreaterThan(points.count, 500)
+        XCTAssertLessThan(longestSegment, 5)
     }
 
     // [AC-CAMUX1015-F4]

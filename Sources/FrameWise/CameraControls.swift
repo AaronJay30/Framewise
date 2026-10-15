@@ -42,7 +42,7 @@ struct CameraTopControls: View {
     }
 
     private var controls: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 16) {
             control(
                 "Flash", symbol: settings.flashMode == .off ? "bolt.slash.fill" : "bolt.fill",
                 value: flashAvailable ? settings.flashMode.title : "—",

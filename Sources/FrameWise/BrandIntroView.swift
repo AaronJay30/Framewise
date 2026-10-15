@@ -13,6 +13,7 @@ struct BrandIntroView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var hasEntered = false
     @State private var hasLockupEntered = false
+    @State private var shutterTrigger = 0
 
     /// A restrained spring gives the mark a soft, spatial arrival without
     /// making the premium wordmark feel bouncy.
@@ -43,7 +44,25 @@ struct BrandIntroView: View {
                 .animation(exitAnimation, value: isActive)
 
             VStack(spacing: 22) {
-                OpenCropSymbol()
+                Group {
+                    if accessibilityReduceMotion {
+                        OpenCropSymbol()
+                    } else {
+                        KeyframeAnimator(
+                            initialValue: CGFloat(1),
+                            trigger: shutterTrigger
+                        ) { scale in
+                            OpenCropSymbol()
+                                .scaleEffect(scale)
+                        } keyframes: { _ in
+                            KeyframeTrack {
+                                LinearKeyframe(1, duration: 0.12)
+                                CubicKeyframe(0.78, duration: 0.14)
+                                CubicKeyframe(1, duration: 0.28)
+                            }
+                        }
+                    }
+                }
                     .frame(width: 88, height: 88)
                     .opacity(hasEntered ? 1 : 0)
                     .scaleEffect(
@@ -88,6 +107,7 @@ struct BrandIntroView: View {
 
     private func setEntranceActive(_ active: Bool) {
         guard active else { return }
+        shutterTrigger += 1
 
         withAnimation(entranceAnimation) {
             hasEntered = true

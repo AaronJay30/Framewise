@@ -72,6 +72,35 @@ struct PhotoPreviewView: View {
         }
         .tabViewStyle(.page(indexDisplayMode: orderedPhotoIDs.count > 1 ? .automatic : .never))
         .background(Color.black)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 12)
+                .onChanged { value in
+                    guard PhotoPreviewDismissal.isDownwardDominant(
+                        translationX: Double(value.translation.width),
+                        translationY: Double(value.translation.height)
+                    ) else {
+                        return
+                    }
+
+                    previewDragOffset = min(value.translation.height, 260)
+                }
+                .onEnded { value in
+                    let shouldDismiss = PhotoPreviewDismissal.shouldDismiss(
+                        translationX: Double(value.translation.width),
+                        translationY: Double(value.translation.height)
+                    )
+
+                    if shouldDismiss {
+                        dismiss()
+                    } else {
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
+                            previewDragOffset = 0
+                        }
+                    }
+                }
+        )
+        .offset(y: previewDragOffset)
+        .opacity(1 - min(Double(previewDragOffset / 520), 0.45))
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if areControlsVisible {
                 actionSection
@@ -111,34 +140,6 @@ struct PhotoPreviewView: View {
         .accessibilityAction(named: Text(areControlsVisible ? "Hide actions" : "Show actions")) {
             toggleControls()
         }
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 12)
-                .onChanged { value in
-                    guard value.translation.height > 0,
-                          value.translation.height > abs(value.translation.width) else {
-                        previewDragOffset = 0
-                        return
-                    }
-
-                    previewDragOffset = min(value.translation.height, 260)
-                }
-                .onEnded { value in
-                    let shouldDismiss = PhotoPreviewDismissal.shouldDismiss(
-                        translationX: Double(value.translation.width),
-                        translationY: Double(value.translation.height)
-                    )
-
-                    if shouldDismiss {
-                        dismiss()
-                    } else {
-                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
-                            previewDragOffset = 0
-                        }
-                    }
-                }
-        )
-        .offset(y: previewDragOffset)
-        .opacity(1 - min(Double(previewDragOffset / 520), 0.45))
     }
 
     private var unavailablePage: some View {

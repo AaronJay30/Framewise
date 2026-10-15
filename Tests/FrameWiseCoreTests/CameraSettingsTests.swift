@@ -257,6 +257,12 @@ final class CameraSettingsTests: XCTestCase {
         )
     }
 
+    func testPreviewAdjustmentsIdentifyWhetherTheyAreIdentity() {
+        XCTAssertTrue(CameraPhotographicStyle.standard.adjustments.isIdentity)
+        XCTAssertTrue(CameraPhotographicStyle.warm.adjustments(at: 0).isIdentity)
+        XCTAssertFalse(CameraPhotographicStyle.vivid.adjustments.isIdentity)
+    }
+
     func testStyleIntensityNormalizesToSafeBounds() {
         XCTAssertEqual(CameraSettings(styleIntensity: .nan).normalized().styleIntensity, 1)
         XCTAssertEqual(CameraSettings(styleIntensity: -1).normalized().styleIntensity, 0)

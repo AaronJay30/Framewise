@@ -140,7 +140,7 @@ struct PhotoGalleryView: View {
     }
 
     private var selectionActionBar: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 8) {
             if let downloadMessage {
                 HStack(spacing: 8) {
                     Text(downloadMessage)
@@ -157,18 +157,18 @@ struct PhotoGalleryView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            HStack(spacing: 10) {
+            Text("\(selectedPhotoIDs.count) Selected")
+                .font(.caption.weight(.semibold).monospacedDigit())
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 5)
+                .background(.white.opacity(0.14), in: Capsule())
+                .accessibilityLabel("\(selectedPhotoIDs.count) selected")
+
+            HStack(spacing: 8) {
                 Button("Cancel", action: exitSelectionMode)
-                    .frame(minWidth: 72, minHeight: 44)
+                    .frame(maxWidth: .infinity, minHeight: 44)
                     .disabled(isDeleting || isDownloading)
-
-                Spacer(minLength: 0)
-
-                Text("\(selectedPhotoIDs.count) Selected")
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-
-                Spacer(minLength: 0)
 
                 Button {
                     downloadSelectedPhotos()
@@ -176,14 +176,14 @@ struct PhotoGalleryView: View {
                     Label(isDownloading ? "Downloading…" : "Download", systemImage: "arrow.down.to.line")
                         .lineLimit(1)
                 }
-                .frame(minWidth: 92, minHeight: 44)
+                .frame(maxWidth: .infinity, minHeight: 44)
                 .foregroundStyle(FrameWiseBrand.signalCoral)
                 .disabled(pendingDownloadIDs.isEmpty || isDeleting || isDownloading)
 
                 Button("Delete", role: .destructive) {
                     isDeleteConfirmationPresented = true
                 }
-                .frame(minWidth: 72, minHeight: 44)
+                .frame(maxWidth: .infinity, minHeight: 44)
                 .disabled(selectedPhotoIDs.isEmpty || isDeleting || isDownloading)
             }
         }
@@ -337,56 +337,60 @@ private struct GalleryPhotoTile: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        ZStack {
-            Group {
-                if let image = UIImage(data: photo.data) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    ZStack {
-                        Color.secondary.opacity(0.12)
-                        Image(systemName: "photo.badge.exclamationmark")
-                            .font(.title3)
-                            .foregroundStyle(.secondary)
+        GeometryReader { geometry in
+            ZStack {
+                Group {
+                    if let image = UIImage(data: photo.data) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: geometry.size.width, height: geometry.size.height)
+                            .clipped()
+                    } else {
+                        ZStack {
+                            Color.secondary.opacity(0.12)
+                            Image(systemName: "photo.badge.exclamationmark")
+                                .font(.title3)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
+                .frame(width: geometry.size.width, height: geometry.size.height)
+
+                if photo.isExported {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, FrameWiseBrand.signalCoral)
+                        .padding(7)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                }
+
+                if isSelectionMode {
+                    selectionIndicator
+                        .padding(8)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                }
             }
-            .frame(maxWidth: .infinity)
-            .aspectRatio(1, contentMode: .fit)
-            .clipped()
+            .frame(width: geometry.size.width, height: geometry.size.height)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-
-            if photo.isExported {
-                Image(systemName: "arrow.down.circle.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, FrameWiseBrand.signalCoral)
-                    .padding(7)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(
+                        FrameWiseBrand.foreground(for: colorScheme).opacity(0.12),
+                        lineWidth: 1
+                    )
             }
-
-            if isSelectionMode {
-                selectionIndicator
-                    .padding(8)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-            }
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(
-                    FrameWiseBrand.foreground(for: colorScheme).opacity(0.12),
-                    lineWidth: 1
+            .accessibilityLabel(
+                Text(
+                    "Photo captured "
+                        + photo.capturedAt.formatted(date: .abbreviated, time: .shortened)
                 )
-        }
-        .accessibilityLabel(
-            Text(
-                "Photo captured "
-                    + photo.capturedAt.formatted(date: .abbreviated, time: .shortened)
             )
-        )
-        .accessibilityValue(accessibilityValueText)
-        .accessibilityAddTraits(isSelectionMode && isSelected ? .isSelected : [])
+            .accessibilityValue(accessibilityValueText)
+            .accessibilityAddTraits(isSelectionMode && isSelected ? .isSelected : [])
+        }
+        .aspectRatio(1, contentMode: .fit)
     }
 
     private var selectionIndicator: some View {

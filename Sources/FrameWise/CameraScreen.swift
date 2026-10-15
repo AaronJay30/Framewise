@@ -148,7 +148,9 @@ struct CameraScreen: View {
                 if viewModel.settings.compositionGuide != .off {
                     CompositionGuideOverlay(
                         guide: viewModel.settings.compositionGuide,
-                        opacity: Double(viewModel.settings.compositionGuideOpacity)
+                        opacity: Double(viewModel.settings.compositionGuideOpacity),
+                        flipHorizontal: viewModel.settings.compositionGuideFlipHorizontal,
+                        flipVertical: viewModel.settings.compositionGuideFlipVertical
                     )
                     .transition(reduceMotion ? .identity : .opacity)
                     .allowsHitTesting(false)
@@ -203,17 +205,12 @@ struct CameraScreen: View {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: viewModel.countdown)
     }
 
+    @ViewBuilder
     private var styledPreview: some View {
         let adjustments = viewModel.settings.photographicStyle.adjustments(
             at: Double(viewModel.settings.styleIntensity)
         )
-        let tint = Color(
-            red: min(max(adjustments.redMultiplier, 0), 1),
-            green: min(max(adjustments.greenMultiplier, 0), 1),
-            blue: min(max(adjustments.blueMultiplier, 0), 1)
-        )
-
-        return CameraPreview(
+        let preview = CameraPreview(
             session: viewModel.session,
             deviceID: viewModel.activeDeviceID,
             onTap: { previewPoint, devicePoint in
@@ -223,10 +220,20 @@ struct CameraScreen: View {
                 )
             }
         )
-        .saturation(adjustments.saturation)
-        .contrast(adjustments.contrast)
-        .brightness(adjustments.brightness)
-        .colorMultiply(tint)
+
+        if adjustments.isIdentity {
+            preview
+        } else {
+            preview
+                .saturation(adjustments.saturation)
+                .contrast(adjustments.contrast)
+                .brightness(adjustments.brightness)
+                .colorMultiply(Color(
+                    red: min(max(adjustments.redMultiplier, 0), 1),
+                    green: min(max(adjustments.greenMultiplier, 0), 1),
+                    blue: min(max(adjustments.blueMultiplier, 0), 1)
+                ))
+        }
     }
 
     private var zoomGesture: some Gesture {
