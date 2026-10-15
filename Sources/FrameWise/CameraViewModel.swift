@@ -263,7 +263,12 @@ final class CameraViewModel: ObservableObject, CameraServiceDelegate {
 
             guard !Task.isCancelled else { return }
             let processedData = await Task.detached(priority: .userInitiated) {
-                CameraPhotoProcessor.process(data: data, settings: settings)
+                CameraPhotoProcessor.process(
+                    data: data,
+                    aspectRatio: settings.aspectRatio,
+                    photographicStyle: settings.photographicStyle,
+                    styleIntensity: settings.styleIntensity
+                )
             }.value
 
             guard let self, !Task.isCancelled else { return }

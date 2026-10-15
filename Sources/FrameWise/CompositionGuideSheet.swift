@@ -43,7 +43,7 @@ struct CompositionGuideSheet: View {
                         Text("Opacity")
                             .font(.subheadline.weight(.medium))
                         Spacer()
-                        Text("\(Int(settings.compositionGuideOpacity * 100))%")
+                        Text("\(opacityPercentage)%")
                             .font(.subheadline.weight(.semibold).monospacedDigit())
                             .foregroundStyle(FrameWiseBrand.signalCoral)
                     }
@@ -51,7 +51,7 @@ struct CompositionGuideSheet: View {
                     Slider(value: opacityBinding, in: 0.20...1.00, step: 0.01)
                         .tint(FrameWiseBrand.signalCoral)
                         .accessibilityLabel("Composition guide opacity")
-                        .accessibilityValue("\(Int(settings.compositionGuideOpacity * 100)) percent")
+                        .accessibilityValue("\(opacityPercentage) percent")
                 }
             }
             .padding(24)
@@ -77,7 +77,8 @@ struct CompositionGuideSheet: View {
                 ZStack(alignment: .topTrailing) {
                     CompositionGuideArtwork(
                         guide: guide,
-                        opacity: Double(settings.compositionGuideOpacity)
+                        opacity: Double(settings.compositionGuideOpacity),
+                        lineColor: selected ? FrameWiseBrand.signalCoral : .white
                     )
                     .frame(width: 82, height: 96)
 
@@ -110,6 +111,10 @@ struct CompositionGuideSheet: View {
                 onChange(next)
             }
         )
+    }
+
+    private var opacityPercentage: Int {
+        Int((Double(settings.compositionGuideOpacity) * 100).rounded())
     }
 }
 #endif

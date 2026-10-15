@@ -14,6 +14,17 @@ struct CompositionGuideOverlay: View {
 struct CompositionGuideArtwork: View {
     let guide: CameraCompositionGuide
     let opacity: Double
+    let lineColor: Color
+
+    init(
+        guide: CameraCompositionGuide,
+        opacity: Double,
+        lineColor: Color = .white
+    ) {
+        self.guide = guide
+        self.opacity = opacity
+        self.lineColor = lineColor
+    }
 
     var body: some View {
         Canvas { context, size in
@@ -38,12 +49,12 @@ struct CompositionGuideArtwork: View {
             lineCap: .round,
             lineJoin: .round
         )
-        let lineColor = Color.white.opacity(safeOpacity)
+        let strokeColor = lineColor.opacity(safeOpacity)
 
         func stroke(_ path: Path, opacity: Double = 1) {
             context.stroke(
                 path,
-                with: .color(lineColor.opacity(opacity)),
+                with: .color(strokeColor.opacity(opacity)),
                 style: strokeStyle
             )
         }

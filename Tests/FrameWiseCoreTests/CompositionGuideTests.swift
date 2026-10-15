@@ -30,7 +30,7 @@ final class CompositionGuideTests: XCTestCase {
                 "Golden ratio",
                 "Golden spiral",
                 "Golden triangle",
-                "Diagonal cross",
+                "Diagonal/X-Frame",
                 "Horizon",
             ]
         )

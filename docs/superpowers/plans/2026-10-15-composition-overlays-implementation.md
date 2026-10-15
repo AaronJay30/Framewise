@@ -4,7 +4,7 @@
 
 **Goal:** Add a polished, persisted set of static composition guides to the live FrameWise camera without changing captured photo pixels or the existing camera interaction model.
 
-**Architecture:** Store the selected guide and opacity in the existing hardware-independent `CameraSettings` contract. Render the guide through a shared SwiftUI artwork view used by both the live preview and the borderless Composition sheet, while keeping the camera service and photo processor unchanged. Wire a separate Composition top control and sheet beside Photographic Styles.
+**Architecture:** Store the selected guide and opacity in the existing hardware-independent `CameraSettings` contract. Render the guide through a shared SwiftUI artwork view used by both the live preview and the borderless Composition sheet, while keeping the camera service unchanged and excluding composition inputs from the photo processor boundary. Wire a separate Composition top control and sheet beside Photographic Styles.
 
 **Tech Stack:** Swift 6, SwiftUI, Foundation, XCTest, existing FrameWiseCore settings persistence, and xtool.
 
@@ -49,7 +49,7 @@
 
   Add tests with the project’s AC naming convention:
 
-  - `testAC_COMP1015_F3_CompositionGuidesExposeApprovedCatalog()` asserts the exact case order and titles, including `Off`, `Rule of thirds`, `Centre cross`, `Quadrant grid`, `Rule of fifths`, `Golden ratio`, `Golden spiral`, `Golden triangle`, `Diagonal cross`, and `Horizon`.
+  - `testAC_COMP1015_F3_CompositionGuidesExposeApprovedCatalog()` asserts the exact case order and titles, including `Off`, `Rule of thirds`, `Centre cross`, `Quadrant grid`, `Rule of fifths`, `Golden ratio`, `Golden spiral`, `Golden triangle`, `Diagonal/X-Frame`, and `Horizon`.
   - `testAC_COMP1015_F7_CompositionSettingsRoundTripThroughCodable()` encodes and decodes a non-default guide with opacity `0.35` and asserts equality.
   - `testAC_COMP1015_E1_OlderSettingsDecodeWithCompositionDefaults()` decodes the existing pre-composition JSON shape and asserts the existing camera fields are preserved, the guide is `.off`, and opacity is `0.60`.
   - `testAC_COMP1015_E2_CompositionOpacityNormalizesToSafeBounds()` covers `NaN`, values below `0.20`, and values above `1.00`.
@@ -116,7 +116,7 @@
 
   Run: `xtool dev build`
 
-  Expected: PASS. Confirm source inspection still shows the overlay is inserted after `styledPreview`, before `FocusExposureOverlay`, is non-interactive, and `CameraPhotoProcessor` is unchanged.
+  Expected: PASS. Confirm source inspection still shows the overlay is inserted after `styledPreview`, before `FocusExposureOverlay`, is non-interactive, and composition inputs are excluded from `CameraPhotoProcessor`.
 
 - [ ] **Step 4: Commit the renderer and preview integration**
 
@@ -170,7 +170,7 @@
 
 - [ ] **Step 1: Update the user-facing project documentation**
 
-  Add the Composition control and guide catalog to the current-state and camera-settings sections of `README.md`. Update `docs/code-walkthrough.md` with the new settings fields, sheet/overlay relationship, and the fact that `CameraPhotoProcessor` remains guide-free. Keep live horizon leveling and advanced guide families in the next-work/deferred list.
+  Add the Composition control and guide catalog to the current-state and camera-settings sections of `README.md`. Update `docs/code-walkthrough.md` with the new settings fields, sheet/overlay relationship, and the fact that composition inputs are excluded from `CameraPhotoProcessor`. Keep live horizon leveling and advanced guide families in the next-work/deferred list.
 
 - [ ] **Step 2: Run the full automated verification**
 
@@ -191,7 +191,7 @@
 
 - [ ] **Step 4: Review the final diff for scope and simplicity**
 
-  Confirm no changes were made to `CameraService` or `CameraPhotoProcessor`, no external dependencies were added, no guide tile backgrounds or borders were introduced, and no deferred live/advanced features slipped into this slice. Resolve any legitimate findings and rerun the affected verification.
+  Confirm no changes were made to `CameraService`, no external dependencies were added, no guide tile backgrounds or borders were introduced, and no deferred live/advanced features slipped into this slice. Confirm `CameraPhotoProcessor` receives only aspect/style inputs. Resolve any legitimate findings and rerun the affected verification.
 
 - [ ] **Step 5: Commit the documentation and verified slice**
 

@@ -7,7 +7,12 @@ import UIKit
 enum CameraPhotoProcessor {
     private static let context = CIContext()
 
-    static func process(data: Data, settings: CameraSettings) -> Data {
+    static func process(
+        data: Data,
+        aspectRatio: CameraAspectRatio,
+        photographicStyle: CameraPhotographicStyle,
+        styleIntensity: Float
+    ) -> Data {
         // [AC-CAMSET1014-E3]
         guard let image = UIImage(data: data),
               let normalizedImage = normalizedImage(image),
@@ -26,7 +31,7 @@ enum CameraPhotoProcessor {
             )
         }
 
-        let normalizedCrop = settings.aspectRatio.cropRect(
+        let normalizedCrop = aspectRatio.cropRect(
             forWidth: extent.width,
             height: extent.height
         )
@@ -44,8 +49,8 @@ enum CameraPhotoProcessor {
             )
         }
 
-        let adjustments = settings.photographicStyle.adjustments(
-            at: Double(settings.styleIntensity)
+        let adjustments = photographicStyle.adjustments(
+            at: Double(styleIntensity)
         )
         let cropped = input.cropped(to: boundedCrop)
 
@@ -117,7 +122,12 @@ import Foundation
 import FrameWiseCore
 
 enum CameraPhotoProcessor {
-    static func process(data: Data, settings: CameraSettings) -> Data {
+    static func process(
+        data: Data,
+        aspectRatio: CameraAspectRatio,
+        photographicStyle: CameraPhotographicStyle,
+        styleIntensity: Float
+    ) -> Data {
         data
     }
 }

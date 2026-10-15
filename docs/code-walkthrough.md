@@ -94,11 +94,13 @@ the persisted `CameraSettings` value.
 `CompositionGuideOverlay` and `CompositionGuideArtwork` share one deterministic
 Canvas renderer for the live preview and sheet thumbnails. The renderer draws
 the first static catalog—thirds, centre cross, quadrant, fifths, golden ratio,
-golden spiral, golden triangle, diagonal cross, and horizon—inside the actual
+golden spiral, golden triangle, Diagonal/X-Frame, and horizon—inside the actual
 aspect-sized preview frame. It is inserted after the styled preview and before
 focus/exposure and countdown layers, with hit testing disabled and a reduced-
-motion-aware opacity transition. `CameraPhotoProcessor` is intentionally
-unchanged: guides are view-only and never modify captured photo pixels.
+motion-aware opacity transition. `CameraPhotoProcessor` receives only the
+aspect and photographic-style inputs it needs; composition fields are excluded
+from that processing boundary, so guides are view-only and never modify
+captured photo pixels.
 
 Live horizon leveling, dynamic symmetry, perspective rays, target aspect/safe
 areas, rotatable variants, and AI recommendations remain deferred to a later
@@ -138,7 +140,7 @@ accessibility, and saved-image confirmation.
 - `[AC-COMP1015-F9]`: the preview ZStack places the non-interactive guide
   below focus/exposure and countdown layers.
 - `[AC-COMP1015-S1]`: the guide exists only in SwiftUI preview/sheet code;
-  `CameraPhotoProcessor` remains guide-free.
+  `CameraPhotoProcessor` receives no composition fields and remains guide-free.
 - `[AC-COMP1015-E1]` and `[AC-COMP1015-E2]`: legacy decoding and safe opacity
   normalization are covered by `CompositionGuideTests`.
 - `[AC-COMP1015-E3]`: Reduced Motion selects an identity transition while

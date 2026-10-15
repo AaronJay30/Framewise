@@ -1,6 +1,6 @@
 import Foundation
 
-public enum CameraCompositionGuide: String, CaseIterable, Codable, Sendable {
+public enum CameraCompositionGuide: String, CaseIterable, Codable, Equatable, Sendable {
     case off
     case ruleOfThirds
     case centreCross
@@ -31,7 +31,7 @@ public enum CameraCompositionGuide: String, CaseIterable, Codable, Sendable {
         case .goldenTriangle:
             return "Golden triangle"
         case .diagonalCross:
-            return "Diagonal cross"
+            return "Diagonal/X-Frame"
         case .horizon:
             return "Horizon"
         }

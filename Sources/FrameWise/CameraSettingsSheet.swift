@@ -2,7 +2,7 @@
 import FrameWiseCore
 import SwiftUI
 
-/// Styles are the only choices that need a panel; capture controls stay visible.
+/// Photographic Styles get their own panel; capture controls stay visible.
 struct CameraSettingsSheet: View {
     let settings: CameraSettings
     let onChange: (CameraSettings) -> Void
@@ -69,7 +69,7 @@ struct CameraSettingsSheet: View {
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .modifier(CameraGlass())
                 }
-                .accessibilityHint("Restores flash, timer, exposure, aspect, zoom, and style defaults.")
+                .accessibilityHint("Restores flash, timer, exposure, aspect, zoom, style, and composition defaults.")
             }
             .padding(24)
         }
