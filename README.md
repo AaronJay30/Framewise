@@ -12,7 +12,8 @@ reference-photo alignment, and on-device AI guidance.
 > add-only Save-to-Photos export, FrameWise-only Delete, and a disabled Edit
 > placeholder. The camera has cycling top controls, a resizable portrait preview,
 > tap-to-focus exposure control, preview zoom presets, and an adjustable style
-> studio.
+> studio. It also has a separate Composition control with static, view-only
+> guides, persisted selection, and adjustable opacity.
 
 ## Product and design documents
 
@@ -34,8 +35,10 @@ Verified on 2026-10-12 from Ubuntu running under WSL2:
 - Physical iPhone detected by `idevice_id` and `xtool devices --usb`.
 - Starter SwiftUI app built successfully with `xtool dev`.
 - The current camera foundation builds successfully with `xtool dev build`.
-- The camera settings slice builds successfully with `xtool dev build`.
-- Physical-device verification of camera settings is the next validation step;
+- The camera settings and composition overlay slices build successfully with
+  `xtool dev build`.
+- Physical-device verification of camera settings and composition overlays is
+  the next validation step;
   personal Apple account details and the device UDID are not stored in this
   repository.
 
@@ -59,6 +62,8 @@ FrameWise/
 │   │   ├── CapturedPhotoStore.swift
 │   │   ├── CameraPhotoProcessor.swift
 │   │   ├── CameraSettingsSheet.swift
+│   │   ├── CompositionGuideOverlay.swift
+│   │   ├── CompositionGuideSheet.swift
 │   │   ├── CameraPreview.swift
 │   │   ├── CameraScreen.swift
 │   │   ├── LibraryView.swift
@@ -69,6 +74,7 @@ FrameWise/
 │   └── FrameWiseCore/
 │       ├── CameraState.swift
 │       ├── CameraStateReducer.swift
+│       ├── CompositionGuide.swift
 │       ├── CameraSettings.swift
 │       ├── CameraPhotoProcessingPolicy.swift
 │       ├── BrandingTokens.swift
@@ -80,6 +86,7 @@ FrameWise/
 │   ├── CameraStateReducerTests.swift
 │   ├── BrandingTokenTests.swift
 │   ├── CameraSettingsTests.swift
+│   ├── CompositionGuideTests.swift
 │   ├── CameraPhotoProcessingPolicyTests.swift
 │   ├── CapturedPhotoGroupingTests.swift
 │   ├── CapturedPhotoLibraryTests.swift
@@ -96,8 +103,9 @@ FrameWise/
 
 The core state target is hardware-independent so settings invariants, the
 reducer, and persistent photo tests run on the host. `CameraSettings` owns
-defaults, Codable persistence values, device-independent crop geometry, and
-style parameters. `CapturedPhotoDiskStore` writes one image file per capture
+defaults, Codable persistence values, device-independent crop geometry, style
+parameters, and the hardware-independent `CameraCompositionGuide` selection
+and opacity. `CapturedPhotoDiskStore` writes one image file per capture
 plus an atomic manifest under the app's private Application Support directory.
 `CapturedPhotoStore` loads that library again on relaunch and only publishes a
 new item after the private write succeeds. The camera target is the iOS-facing
@@ -118,6 +126,16 @@ unlock focus. The user-facing exposure range is capped at ±2 EV even when the
 hardware exposes a wider range. Styles have their own studio panel with
 selectable looks and a 0–100% intensity control, including Reset camera
 settings.
+
+The Composition button sits beside Photographic Styles and opens its own black
+sheet. The first static guide catalog is Off, Rule of Thirds, Centre Cross,
+Quadrant Grid, Rule of Fifths, Golden Ratio, Golden Spiral, Golden Triangle,
+Diagonal/X-Frame, and Horizon. Guide choices use borderless miniature previews,
+stay open while selection changes the live preview, and share a 20–100%
+opacity control. The guide is view-only SwiftUI artwork, so it follows the
+selected preview aspect without entering `CameraPhotoProcessor` or captured
+photo bytes. The static horizon is a reference line; live leveling and the
+advanced symmetry, perspective, safe-area, and AI guide families are deferred.
 
 Zoom presets sit inside the preview with individual touch targets; pinch
 remains available for intermediate values. Preset changes use a native zoom
@@ -321,15 +339,16 @@ Developer Mode is under **Settings → Privacy & Security → Developer Mode**.
 
 ## What is next
 
-1. Verify the branded opener, permission recovery, camera switching, and
-   still capture on a connected iPhone, including Reduced Motion.
-2. Add rule-of-thirds, golden spiral/Fibonacci, and horizon overlays.
+1. Verify the branded opener, permission recovery, camera switching, still
+   capture, and the static composition overlay catalog on a connected iPhone,
+   including Reduced Motion, Dynamic Type, VoiceOver, and clean captured bytes.
+2. Add live horizon leveling, rotatable spiral/triangle variants, dynamic
+   symmetry, perspective rays, aspect-ratio target frames, and safe areas.
 3. Add the AI Guide UI: subject marker, target dot, arrow, and short label.
 4. Add reference-photo overlay with opacity, scale, position, and lock.
 5. Add offline Vision/Core ML scene analysis for scenery and landscapes.
 6. Add the composition recommendation and alignment engine.
-7. Ensure exported photos exclude all guides, arrows, labels, and reference
-   overlays.
+7. Extend clean-output verification as AI and reference overlays arrive.
 8. Add device testing for low confidence, alignment stability, battery use,
    and reduced motion.
 

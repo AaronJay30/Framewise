@@ -23,15 +23,19 @@ can be read from the outside in.
 ## Camera settings and capture flow
 
 `Sources/FrameWiseCore/CameraSettings.swift` is the hardware-independent
-contract for Flash, Timer, Exposure, Tap Focus, Aspect, Zoom, and the five
-app-defined Photographic Styles. It provides safe defaults, Codable values for
-local persistence, normalized focus points, centered crop geometry, and pure
-style adjustments. `CameraSettingsTests` covers the choices, invariants,
-Codable round trip, and capture snapshot behavior on the host.
+contract for Flash, Timer, Exposure, Tap Focus, Aspect, Zoom, the five
+app-defined Photographic Styles, and the static `CameraCompositionGuide`
+catalog. It provides safe defaults, Codable values for local persistence,
+normalized focus points, centered crop geometry, pure style adjustments, and
+safe composition opacity normalization. `CameraSettingsTests` and
+`CompositionGuideTests` cover the choices, invariants, Codable round trips,
+legacy settings decoding, reset behavior, and capture snapshot behavior on the
+host.
 
 `CameraScreen` uses `CameraTopControls` for cycling Flash, Timer, and Aspect;
-Tap Focus places a `FocusExposureOverlay` beside the reticle, and Styles opens
-the adjustable `CameraSettingsSheet`. `CameraZoomControls` places supported presets
+Tap Focus places a `FocusExposureOverlay` beside the reticle, Styles opens the
+adjustable `CameraSettingsSheet`, and Composition opens the separate black
+`CompositionGuideSheet`. `CameraZoomControls` places supported presets
 inside the preview. These views live in `CameraControls.swift`, whose
 `CameraGlass` modifier selects native Liquid Glass on iOS 26+, a legacy
 material fallback, or opaque black when Reduce Transparency is enabled.
@@ -78,6 +82,28 @@ intensity. The style studio uses generated gradient artwork rather than a
 placeholder photo, while the same interpolated adjustments are applied to the
 live preview and processed capture.
 
+## Composition overlay flow
+
+`CameraCompositionGuide` is deliberately hardware-independent. The separate
+Composition button uses the existing top-row scrolling behavior and reports the
+selected guide to VoiceOver. `CompositionGuideSheet` keeps the guide choices
+borderless and black-blended, uses real miniature renderings, leaves the sheet
+open while selection changes, and binds the 20–100% opacity slider directly to
+the persisted `CameraSettings` value.
+
+`CompositionGuideOverlay` and `CompositionGuideArtwork` share one deterministic
+Canvas renderer for the live preview and sheet thumbnails. The renderer draws
+the first static catalog—thirds, centre cross, quadrant, fifths, golden ratio,
+golden spiral, golden triangle, diagonal cross, and horizon—inside the actual
+aspect-sized preview frame. It is inserted after the styled preview and before
+focus/exposure and countdown layers, with hit testing disabled and a reduced-
+motion-aware opacity transition. `CameraPhotoProcessor` is intentionally
+unchanged: guides are view-only and never modify captured photo pixels.
+
+Live horizon leveling, dynamic symmetry, perspective rays, target aspect/safe
+areas, rotatable variants, and AI recommendations remain deferred to a later
+design.
+
 Rear-camera selection prefers triple/dual-wide/dual virtual devices before
 falling back to the wide-angle camera. On iOS 18+, the system's display zoom
 multiplier translates hardware zoom into familiar .5/1x/2x values; iOS 17
@@ -92,6 +118,33 @@ encode, the original capture bytes continue through storage. Processing is
 serialized for capture order but runs off the main actor. Its invalid-data test
 runs in the host suite; UIKit/Core Image execution is compile-checked by
 `xtool dev build`.
+
+## Composition acceptance traceability
+
+The implementation and host/build evidence map to the approved `COMP1015`
+criteria below. The physical-device pass remains pending for interaction,
+accessibility, and saved-image confirmation.
+
+- `[AC-COMP1015-F1]` and `[AC-COMP1015-F2]`: `CameraTopControls` presents a
+  separate Composition button and `CompositionGuideSheet` uses a dedicated
+  black sheet.
+- `[AC-COMP1015-F3]`: `CameraCompositionGuide.allCases` and
+  `CompositionGuideTests` cover the complete ordered catalog.
+- `[AC-COMP1015-F4]`, `[AC-COMP1015-F5]`, and `[AC-COMP1015-F6]`:
+  `CompositionGuideSheet` keeps selection and opacity changes live while the
+  shared artwork follows the aspect-sized preview frame.
+- `[AC-COMP1015-F7]` and `[AC-COMP1015-F8]`: `CameraSettings` Codable,
+  normalization, and reset tests cover persistence and defaults.
+- `[AC-COMP1015-F9]`: the preview ZStack places the non-interactive guide
+  below focus/exposure and countdown layers.
+- `[AC-COMP1015-S1]`: the guide exists only in SwiftUI preview/sheet code;
+  `CameraPhotoProcessor` remains guide-free.
+- `[AC-COMP1015-E1]` and `[AC-COMP1015-E2]`: legacy decoding and safe opacity
+  normalization are covered by `CompositionGuideTests`.
+- `[AC-COMP1015-E3]`: Reduced Motion selects an identity transition while
+  retaining the same guide geometry.
+- `[AC-COMP1015-E4]`: the guide row scrolls horizontally and labels use
+  Dynamic Type-compatible SwiftUI text styles.
 
 ## Persistent captured-photo flow
 
