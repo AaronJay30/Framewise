@@ -19,6 +19,7 @@ struct CameraScreen: View {
     @State private var isProcessingPendingCapture = false
     @State private var isSettingsPresented = false
     @State private var isCompositionPresented = false
+    @State private var isResolutionPresented = false
     @State private var isPinching = false
 
     var body: some View {
@@ -49,9 +50,11 @@ struct CameraScreen: View {
                 CameraTopControls(
                     settings: viewModel.settings,
                     flashAvailable: viewModel.flashAvailable,
+                    photoResolutionCapability: viewModel.photoResolutionCapability,
                     onChange: { viewModel.updateSettings($0) },
                     onStyles: { isSettingsPresented = true },
-                    onComposition: { isCompositionPresented = true }
+                    onComposition: { isCompositionPresented = true },
+                    onResolution: { isResolutionPresented = true }
                 )
             }
         }
@@ -90,6 +93,13 @@ struct CameraScreen: View {
         .sheet(isPresented: $isCompositionPresented) {
             CompositionGuideSheet(
                 settings: viewModel.settings,
+                onChange: { viewModel.updateSettings($0) }
+            )
+        }
+        .sheet(isPresented: $isResolutionPresented) {
+            CameraResolutionSheet(
+                settings: viewModel.settings,
+                capability: viewModel.photoResolutionCapability,
                 onChange: { viewModel.updateSettings($0) }
             )
         }

@@ -32,7 +32,6 @@ struct CompositionGuideArtwork: View {
             drawGuide(guide, in: size, context: &context)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .shadow(color: .black.opacity(0.36), radius: 2)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -170,121 +169,23 @@ struct CompositionGuideArtwork: View {
     }
 
     private func goldenSpiralPath(in bounds: CGRect) -> Path {
-        let phi = CGFloat((1 + sqrt(5.0)) / 2)
-        var rectangle: CGRect
-
-        if bounds.width >= bounds.height {
-            let height = min(bounds.height, bounds.width / phi)
-            rectangle = CGRect(
-                x: bounds.midX - height * phi / 2,
-                y: bounds.midY - height / 2,
-                width: height * phi,
-                height: height
-            )
-        } else {
-            let width = min(bounds.width, bounds.height / phi)
-            rectangle = CGRect(
-                x: bounds.midX - width / 2,
-                y: bounds.midY - width * phi / 2,
-                width: width,
-                height: width * phi
-            )
-        }
-
+        let points = CameraGoldenSpiralGeometry.points()
+        guard let first = points.first else { return Path() }
         var path = Path()
-        var turn = rectangle.width >= rectangle.height ? 0 : 1
-
-        for _ in 0..<8 {
-            let side = min(rectangle.width, rectangle.height)
-            guard side > 0.5 else { break }
-
-            let square: CGRect
-            switch turn % 4 {
-            case 0:
-                square = CGRect(
-                    x: rectangle.minX,
-                    y: rectangle.minY,
-                    width: side,
-                    height: side
+        path.move(
+            to: CGPoint(
+                x: bounds.minX + CGFloat(first.x) * bounds.width,
+                y: bounds.minY + CGFloat(first.y) * bounds.height
+            )
+        )
+        for point in points.dropFirst() {
+            path.addLine(
+                to: CGPoint(
+                    x: bounds.minX + CGFloat(point.x) * bounds.width,
+                    y: bounds.minY + CGFloat(point.y) * bounds.height
                 )
-                path.addArc(
-                    center: CGPoint(x: square.minX, y: square.maxY),
-                    radius: side,
-                    startAngle: .degrees(-90),
-                    endAngle: .degrees(0),
-                    clockwise: false
-                )
-                rectangle = CGRect(
-                    x: rectangle.minX + side,
-                    y: rectangle.minY,
-                    width: max(rectangle.width - side, 0),
-                    height: rectangle.height
-                )
-            case 1:
-                square = CGRect(
-                    x: rectangle.minX,
-                    y: rectangle.maxY - side,
-                    width: side,
-                    height: side
-                )
-                path.addArc(
-                    center: CGPoint(x: square.maxX, y: square.maxY),
-                    radius: side,
-                    startAngle: .degrees(180),
-                    endAngle: .degrees(270),
-                    clockwise: false
-                )
-                rectangle = CGRect(
-                    x: rectangle.minX,
-                    y: rectangle.minY,
-                    width: rectangle.width,
-                    height: max(rectangle.height - side, 0)
-                )
-            case 2:
-                square = CGRect(
-                    x: rectangle.maxX - side,
-                    y: rectangle.minY,
-                    width: side,
-                    height: side
-                )
-                path.addArc(
-                    center: CGPoint(x: square.maxX, y: square.minY),
-                    radius: side,
-                    startAngle: .degrees(90),
-                    endAngle: .degrees(180),
-                    clockwise: false
-                )
-                rectangle = CGRect(
-                    x: rectangle.minX,
-                    y: rectangle.minY,
-                    width: max(rectangle.width - side, 0),
-                    height: rectangle.height
-                )
-            default:
-                square = CGRect(
-                    x: rectangle.minX,
-                    y: rectangle.minY,
-                    width: side,
-                    height: side
-                )
-                path.addArc(
-                    center: CGPoint(x: square.minX, y: square.minY),
-                    radius: side,
-                    startAngle: .degrees(0),
-                    endAngle: .degrees(90),
-                    clockwise: false
-                )
-                rectangle = CGRect(
-                    x: rectangle.minX,
-                    y: rectangle.minY + side,
-                    width: rectangle.width,
-                    height: max(rectangle.height - side, 0)
-                )
-            }
-
-            turn += 1
+            )
         }
-
         return path
     }
 }

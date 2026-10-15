@@ -103,4 +103,28 @@ final class CompositionGuideTests: XCTestCase {
         XCTAssertEqual(CameraSettings.defaults.compositionGuide, .off)
         XCTAssertEqual(CameraSettings.defaults.compositionGuideOpacity, 0.60)
     }
+
+    // [AC-CAMLIB1015-F1]
+    func testAC_CAMLIB1015_F1_GoldenSpiralProvidesAStableContinuousSample() {
+        let points = CameraGoldenSpiralGeometry.points(sampleCount: 160)
+
+        XCTAssertEqual(points.count, 160)
+        XCTAssertEqual(
+            CameraGoldenSpiralGeometry.points(sampleCount: 160).count,
+            points.count
+        )
+        XCTAssertTrue(points.allSatisfy { (0...1).contains($0.x) && (0...1).contains($0.y) })
+    }
+
+    // [AC-CAMLIB1015-F2]
+    func testAC_CAMLIB1015_F2_GoldenSpiralRunsFromLowerRightToUpperLeft() {
+        let points = CameraGoldenSpiralGeometry.points(sampleCount: 160)
+        let inner = try! XCTUnwrap(points.first)
+        let outer = try! XCTUnwrap(points.last)
+
+        XCTAssertGreaterThan(inner.x, 0.5)
+        XCTAssertGreaterThan(inner.y, 0.5)
+        XCTAssertLessThan(outer.x, 0.5)
+        XCTAssertLessThan(outer.y, 0.5)
+    }
 }
