@@ -31,6 +31,8 @@ enum CameraPhotoProcessor {
             )
         }
 
+        // CameraAspectRatio keeps the portrait UI framing while selecting the
+        // reciprocal target for landscape source pixels.
         let normalizedCrop = aspectRatio.cropRect(
             forWidth: extent.width,
             height: extent.height

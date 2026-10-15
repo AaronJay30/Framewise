@@ -76,7 +76,7 @@ public enum CameraAspectRatio: String, CaseIterable, Codable, Sendable {
         }
     }
 
-    /// Width divided by height. Rectangular capture frames are portrait.
+    /// Width divided by height for the portrait camera UI.
     public var value: Double {
         switch self {
         case .fourByThree:
@@ -110,9 +110,12 @@ public enum CameraAspectRatio: String, CaseIterable, Codable, Sendable {
             return CameraCropRect(x: 0, y: 0, width: 1, height: 1)
         }
 
+        // The live camera frame remains portrait, but a landscape source must
+        // keep its landscape aspect when the captured image is processed.
+        let targetValue = width > height ? 1 / value : value
         let sourceValue = width / height
-        if sourceValue > value {
-            let cropWidth = value / sourceValue
+        if sourceValue > targetValue {
+            let cropWidth = targetValue / sourceValue
             return CameraCropRect(
                 x: (1 - cropWidth) / 2,
                 y: 0,
@@ -121,8 +124,8 @@ public enum CameraAspectRatio: String, CaseIterable, Codable, Sendable {
             )
         }
 
-        if sourceValue < value {
-            let cropHeight = sourceValue / value
+        if sourceValue < targetValue {
+            let cropHeight = sourceValue / targetValue
             return CameraCropRect(
                 x: 0,
                 y: (1 - cropHeight) / 2,

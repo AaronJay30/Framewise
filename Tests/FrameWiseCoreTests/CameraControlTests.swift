@@ -48,6 +48,34 @@ final class CameraControlTests: XCTestCase {
         XCTAssertEqual(CameraAspectRatio.square.previewSize(fittingWidth: .nan, height: 600).width, 0)
     }
 
+    // [AC-CAMUX1015-F1]
+    func testAC_CAMUX1015_F1_LandscapeSixteenByNineUsesLandscapeCrop() {
+        let crop = CameraAspectRatio.sixteenByNine.cropRect(
+            forWidth: 4000,
+            height: 3000
+        )
+
+        XCTAssertEqual(crop.x, 0, accuracy: 0.0001)
+        XCTAssertEqual(crop.y, 0.125, accuracy: 0.0001)
+        XCTAssertEqual(crop.width, 1, accuracy: 0.0001)
+        XCTAssertEqual(crop.height, 0.75, accuracy: 0.0001)
+    }
+
+    // [AC-CAMUX1015-F2]
+    func testAC_CAMUX1015_F2_PortraitSquareAndInvalidCropInputsStaySafe() {
+        let portrait = CameraAspectRatio.sixteenByNine.cropRect(
+            forWidth: 2250,
+            height: 4000
+        )
+        XCTAssertEqual(portrait, CameraCropRect(x: 0, y: 0, width: 1, height: 1))
+
+        let square = CameraAspectRatio.square.cropRect(forWidth: 3000, height: 3000)
+        XCTAssertEqual(square, CameraCropRect(x: 0, y: 0, width: 1, height: 1))
+
+        let invalid = CameraAspectRatio.sixteenByNine.cropRect(forWidth: .nan, height: 3000)
+        XCTAssertEqual(invalid, CameraCropRect(x: 0, y: 0, width: 1, height: 1))
+    }
+
     func testExposureIndicatorMovesInTheSameDirectionAsTheDrag() {
         let range = CameraExposureRange.defaults
         let left = range.bias(startingAt: 0, translation: -80)
