@@ -24,6 +24,7 @@ struct CameraTopControls: View {
     let flashAvailable: Bool
     let onChange: (CameraSettings) -> Void
     let onStyles: () -> Void
+    let onComposition: () -> Void
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -71,6 +72,10 @@ struct CameraTopControls: View {
             control("Photographic styles", symbol: "camera.filters", value: nil,
                     active: settings.photographicStyle != .standard, action: onStyles)
                 .accessibilityValue(settings.photographicStyle.title)
+
+            control("Composition", symbol: "square.grid.3x3", value: nil,
+                    active: settings.compositionGuide != .off, action: onComposition)
+                .accessibilityValue(settings.compositionGuide.title)
         }
         .fixedSize(horizontal: true, vertical: false)
     }

@@ -18,6 +18,7 @@ struct CameraScreen: View {
     @State private var captureFlight: CapturedPhoto?
     @State private var isProcessingPendingCapture = false
     @State private var isSettingsPresented = false
+    @State private var isCompositionPresented = false
     @State private var isPinching = false
 
     var body: some View {
@@ -49,7 +50,8 @@ struct CameraScreen: View {
                     settings: viewModel.settings,
                     flashAvailable: viewModel.flashAvailable,
                     onChange: { viewModel.updateSettings($0) },
-                    onStyles: { isSettingsPresented = true }
+                    onStyles: { isSettingsPresented = true },
+                    onComposition: { isCompositionPresented = true }
                 )
             }
         }
@@ -83,6 +85,12 @@ struct CameraScreen: View {
                 settings: viewModel.settings,
                 onChange: { viewModel.updateSettings($0) },
                 onReset: viewModel.resetSettings
+            )
+        }
+        .sheet(isPresented: $isCompositionPresented) {
+            CompositionGuideSheet(
+                settings: viewModel.settings,
+                onChange: { viewModel.updateSettings($0) }
             )
         }
     }
