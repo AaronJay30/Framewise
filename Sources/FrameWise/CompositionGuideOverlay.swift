@@ -169,7 +169,10 @@ struct CompositionGuideArtwork: View {
     }
 
     private func goldenSpiralPath(in bounds: CGRect) -> Path {
-        let points = CameraGoldenSpiralGeometry.points()
+        let points = CameraGoldenSpiralGeometry.points(
+            width: Double(bounds.width),
+            height: Double(bounds.height)
+        )
         guard let first = points.first else { return Path() }
         var path = Path()
         path.move(

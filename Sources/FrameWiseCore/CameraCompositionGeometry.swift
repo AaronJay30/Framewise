@@ -56,4 +56,32 @@ public enum CameraGoldenSpiralGeometry {
             )
         }
     }
+
+    /// Returns the same normalized spiral fitted inside an aspect-correct
+    /// square centered in the requested bounds.
+    public static func points(
+        width: Double,
+        height: Double,
+        sampleCount: Int = 160
+    ) -> [CameraGuidePoint] {
+        guard width.isFinite, height.isFinite, width > 0, height > 0 else {
+            return []
+        }
+
+        let squarePoints = points(sampleCount: sampleCount)
+        guard !squarePoints.isEmpty else { return [] }
+
+        let squareSize = min(width, height)
+        let xInset = (width - squareSize) / (2 * width)
+        let yInset = (height - squareSize) / (2 * height)
+        let xScale = squareSize / width
+        let yScale = squareSize / height
+
+        return squarePoints.map { point in
+            CameraGuidePoint(
+                x: xInset + point.x * xScale,
+                y: yInset + point.y * yScale
+            )
+        }
+    }
 }

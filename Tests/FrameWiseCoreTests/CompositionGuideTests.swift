@@ -127,4 +127,21 @@ final class CompositionGuideTests: XCTestCase {
         XCTAssertLessThan(outer.x, 0.5)
         XCTAssertLessThan(outer.y, 0.5)
     }
+
+    // [AC-CAMUX1015-F4]
+    func testAC_CAMUX1015_F4_SizeAwareSpiralPreservesItsAspect() {
+        let points = CameraGoldenSpiralGeometry.points(width: 390, height: 844)
+        let xSpan = (points.map(\.x).max() ?? 0) - (points.map(\.x).min() ?? 0)
+        let ySpan = (points.map(\.y).max() ?? 0) - (points.map(\.y).min() ?? 0)
+
+        XCTAssertEqual(xSpan / ySpan, 844.0 / 390.0, accuracy: 0.02)
+        XCTAssertTrue(points.allSatisfy { (0...1).contains($0.x) && (0...1).contains($0.y) })
+    }
+
+    // [AC-CAMUX1015-E3]
+    func testAC_CAMUX1015_E3_SizeAwareSpiralRejectsInvalidInputs() {
+        XCTAssertTrue(CameraGoldenSpiralGeometry.points(width: .nan, height: 844).isEmpty)
+        XCTAssertTrue(CameraGoldenSpiralGeometry.points(width: 390, height: 0).isEmpty)
+        XCTAssertTrue(CameraGoldenSpiralGeometry.points(width: 390, height: 844, sampleCount: 0).isEmpty)
+    }
 }
