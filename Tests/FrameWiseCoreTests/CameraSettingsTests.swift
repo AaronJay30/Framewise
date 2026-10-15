@@ -60,6 +60,7 @@ final class CameraSettingsTests: XCTestCase {
         XCTAssertEqual(CameraSettings.defaults.aspectRatio, .fourByThree)
         XCTAssertEqual(CameraSettings.defaults.zoomFactor, 1)
         XCTAssertEqual(CameraSettings.defaults.photographicStyle, .standard)
+        XCTAssertEqual(CameraSettings.defaults.photoResolution, .standard)
     }
 
     // [AC-CAMSET1014-F4]
@@ -270,7 +271,8 @@ final class CameraSettingsTests: XCTestCase {
             aspectRatio: .sixteenByNine,
             zoomFactor: 2.5,
             photographicStyle: .warm,
-            styleIntensity: 0.65
+            styleIntensity: 0.65,
+            photoResolution: .maximum
         )
 
         let data = try JSONEncoder().encode(settings)
@@ -285,6 +287,7 @@ final class CameraSettingsTests: XCTestCase {
         let decoded = try JSONDecoder().decode(CameraSettings.self, from: data)
 
         XCTAssertEqual(decoded.styleIntensity, 1)
+        XCTAssertEqual(decoded.photoResolution, .standard)
     }
 
     func testCaptureSettingsSnapshotDoesNotChangeWhenCurrentSettingsChange() {
@@ -304,7 +307,8 @@ final class CameraSettingsTests: XCTestCase {
             exposureBias: -2,
             aspectRatio: .square,
             zoomFactor: 4,
-            photographicStyle: .mono
+            photographicStyle: .mono,
+            photoResolution: .maximum
         )
 
         settings.reset()

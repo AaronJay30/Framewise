@@ -349,6 +349,7 @@ public struct CameraSettings: Equatable, Codable, Sendable {
     public var styleIntensity: Float
     public var compositionGuide: CameraCompositionGuide
     public var compositionGuideOpacity: Float
+    public var photoResolution: CameraPhotoResolution
 
     public init(
         flashMode: CameraFlashMode = .off,
@@ -359,7 +360,8 @@ public struct CameraSettings: Equatable, Codable, Sendable {
         photographicStyle: CameraPhotographicStyle = .standard,
         styleIntensity: Float = 1,
         compositionGuide: CameraCompositionGuide = .off,
-        compositionGuideOpacity: Float = 0.60
+        compositionGuideOpacity: Float = 0.60,
+        photoResolution: CameraPhotoResolution = .standard
     ) {
         self.flashMode = flashMode
         self.timerDuration = timerDuration
@@ -370,6 +372,7 @@ public struct CameraSettings: Equatable, Codable, Sendable {
         self.styleIntensity = styleIntensity
         self.compositionGuide = compositionGuide
         self.compositionGuideOpacity = compositionGuideOpacity
+        self.photoResolution = photoResolution
     }
 
     public static let defaults = CameraSettings()
@@ -384,6 +387,7 @@ public struct CameraSettings: Equatable, Codable, Sendable {
         case styleIntensity
         case compositionGuide
         case compositionGuideOpacity
+        case photoResolution
     }
 
     public init(from decoder: Decoder) throws {
@@ -397,6 +401,7 @@ public struct CameraSettings: Equatable, Codable, Sendable {
         self.styleIntensity = try values.decodeIfPresent(Float.self, forKey: .styleIntensity) ?? 1
         self.compositionGuide = try values.decodeIfPresent(CameraCompositionGuide.self, forKey: .compositionGuide) ?? .off
         self.compositionGuideOpacity = try values.decodeIfPresent(Float.self, forKey: .compositionGuideOpacity) ?? 0.60
+        self.photoResolution = try values.decodeIfPresent(CameraPhotoResolution.self, forKey: .photoResolution) ?? .standard
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -410,6 +415,7 @@ public struct CameraSettings: Equatable, Codable, Sendable {
         try values.encode(styleIntensity, forKey: .styleIntensity)
         try values.encode(compositionGuide, forKey: .compositionGuide)
         try values.encode(compositionGuideOpacity, forKey: .compositionGuideOpacity)
+        try values.encode(photoResolution, forKey: .photoResolution)
     }
 
     /// Flash is set per capture; aspect, timer, and style don't reconfigure the sensor.
