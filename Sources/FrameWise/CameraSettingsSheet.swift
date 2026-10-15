@@ -69,7 +69,7 @@ struct CameraSettingsSheet: View {
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .modifier(CameraGlass())
                 }
-                .accessibilityHint("Restores flash, timer, exposure, aspect, zoom, style, and composition defaults.")
+                .accessibilityHint("Restores flash, timer, exposure, aspect, zoom, style, composition guide, and opacity defaults.")
             }
             .padding(24)
         }
